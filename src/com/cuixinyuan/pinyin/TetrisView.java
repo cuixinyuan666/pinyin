@@ -193,7 +193,9 @@ public class TetrisView extends View {
     protected void onSizeChanged(int w, int h, int ow, int oh) {
         super.onSizeChanged(w, h, ow, oh);
         if (w <= 0 || h <= 0) return;
-        cell = Math.min((float) w / COLS, (float) h / ROWS);
+        // 优先用满宽度（消除两侧留白），仅在棋盘高度超出可用高度时回退到高度限制
+        cell = (float) w / COLS;
+        if (cell * ROWS > h) cell = (float) h / ROWS;
         sized = true;
     }
 
