@@ -5,7 +5,7 @@ set -e
 # 不依赖 Gradle / Maven / Android Studio。
 # 运行环境：Windows + Git Bash + JDK 17+ + Android SDK
 
-ROOT="$(cd "$(dirname "$0")" && pwd)"
+ROOT="$(cd "$(dirname "$0")" && pwd -W)"
 SDK="${ANDROID_SDK:-D:/SOFTWARE/android_sdk}"
 BT="${SDK}/build-tools/35.0.0"
 AJ="${SDK}/platforms/android-34/android.jar"
@@ -18,7 +18,8 @@ echo "SDK=${SDK}"
 echo "==> 1. compile java"
 rm -rf "$OBJ"; mkdir -p "$OBJ"
 javac -encoding UTF-8 -source 17 -target 17 -cp "$AJ" -d "$OBJ" \
-  "$ROOT/src/com/cuixinyuan/pinyin/MainActivity.java"
+  "$ROOT/src/com/cuixinyuan/pinyin/MainActivity.java" \
+  "$ROOT/src/com/cuixinyuan/pinyin/SnakeView.java"
 echo "    java classes: $(ls "$OBJ/com/cuixinyuan/pinyin" | wc -l) files"
 
 echo "==> 2. d8 dex"

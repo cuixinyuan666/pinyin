@@ -11,5 +11,8 @@ build/
 !res/drawable/*.png
 !res/mipmap-*/**/*.png
 
+# WorkBuddy 本地记忆与工作区配置
+.workbuddy/
+
 # 保留最终 APK 作为发布产物
 !pinyin-app.apk

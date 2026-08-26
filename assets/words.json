@@ -1,104 +1,716 @@
 [
-  {"word":"一","py":"yi","tone":1},
-  {"word":"二","py":"er","tone":4},
-  {"word":"三","py":"san","tone":1},
-  {"word":"四","py":"si","tone":4},
-  {"word":"五","py":"wu","tone":3},
-  {"word":"六","py":"liu","tone":4},
-  {"word":"七","py":"qi","tone":1},
-  {"word":"八","py":"ba","tone":1},
-  {"word":"九","py":"jiu","tone":3},
-  {"word":"十","py":"shi","tone":2},
-  {"word":"人","py":"ren","tone":2},
-  {"word":"口","py":"kou","tone":3},
-  {"word":"手","py":"shou","tone":3},
-  {"word":"足","py":"zu","tone":2},
-  {"word":"目","py":"mu","tone":4},
-  {"word":"耳","py":"er","tone":3},
-  {"word":"日","py":"ri","tone":4},
-  {"word":"月","py":"yue","tone":4},
-  {"word":"水","py":"shui","tone":3},
-  {"word":"火","py":"huo","tone":3},
-  {"word":"山","py":"shan","tone":1},
-  {"word":"石","py":"shi","tone":2},
-  {"word":"田","py":"tian","tone":2},
-  {"word":"土","py":"tu","tone":3},
-  {"word":"木","py":"mu","tone":4},
-  {"word":"花","py":"hua","tone":1},
-  {"word":"鸟","py":"niao","tone":3},
-  {"word":"虫","py":"chong","tone":2},
-  {"word":"鱼","py":"yu","tone":2},
-  {"word":"马","py":"ma","tone":3},
-  {"word":"牛","py":"niu","tone":2},
-  {"word":"羊","py":"yang","tone":2},
-  {"word":"狗","py":"gou","tone":3},
-  {"word":"猫","py":"mao","tone":1},
-  {"word":"兔","py":"tu","tone":4},
-  {"word":"龙","py":"long","tone":2},
-  {"word":"红","py":"hong","tone":2},
-  {"word":"白","py":"bai","tone":2},
-  {"word":"黑","py":"hei","tone":1},
-  {"word":"大","py":"da","tone":4},
-  {"word":"小","py":"xiao","tone":3},
-  {"word":"多","py":"duo","tone":1},
-  {"word":"少","py":"shao","tone":3},
-  {"word":"上","py":"shang","tone":4},
-  {"word":"下","py":"xia","tone":4},
-  {"word":"左","py":"zuo","tone":3},
-  {"word":"右","py":"you","tone":4},
-  {"word":"前","py":"qian","tone":2},
-  {"word":"后","py":"hou","tone":4},
-  {"word":"来","py":"lai","tone":2},
-  {"word":"去","py":"qu","tone":4},
-  {"word":"开","py":"kai","tone":1},
-  {"word":"关","py":"guan","tone":1},
-  {"word":"天","py":"tian","tone":1},
-  {"word":"地","py":"di","tone":4},
-  {"word":"风","py":"feng","tone":1},
-  {"word":"云","py":"yun","tone":2},
-  {"word":"雨","py":"yu","tone":3},
-  {"word":"雪","py":"xue","tone":3},
-  {"word":"电","py":"dian","tone":4},
-  {"word":"春","py":"chun","tone":1},
-  {"word":"夏","py":"xia","tone":4},
-  {"word":"秋","py":"qiu","tone":1},
-  {"word":"冬","py":"dong","tone":1},
-  {"word":"爸","py":"ba","tone":4},
-  {"word":"妈","py":"ma","tone":1},
-  {"word":"哥","py":"ge","tone":1},
-  {"word":"姐","py":"jie","tone":3},
-  {"word":"弟","py":"di","tone":4},
-  {"word":"妹","py":"mei","tone":4},
-  {"word":"我","py":"wo","tone":3},
-  {"word":"你","py":"ni","tone":3},
-  {"word":"他","py":"ta","tone":1},
-  {"word":"她","py":"ta","tone":1},
-  {"word":"好","py":"hao","tone":3},
-  {"word":"爱","py":"ai","tone":4},
-  {"word":"吃","py":"chi","tone":1},
-  {"word":"喝","py":"he","tone":1},
-  {"word":"笑","py":"xiao","tone":4},
-  {"word":"哭","py":"ku","tone":1},
-  {"word":"走","py":"zou","tone":3},
-  {"word":"跑","py":"pao","tone":3},
-  {"word":"飞","py":"fei","tone":1},
-  {"word":"看","py":"kan","tone":4},
-  {"word":"听","py":"ting","tone":1},
-  {"word":"说","py":"shuo","tone":1},
-  {"word":"读","py":"du","tone":2},
-  {"word":"写","py":"xie","tone":3},
-  {"word":"书","py":"shu","tone":1},
-  {"word":"画","py":"hua","tone":4},
-  {"word":"学","py":"xue","tone":2},
-  {"word":"校","py":"xiao","tone":4},
-  {"word":"门","py":"men","tone":2},
-  {"word":"窗","py":"chuang","tone":1},
-  {"word":"床","py":"chuang","tone":2},
-  {"word":"灯","py":"deng","tone":1},
-  {"word":"桌","py":"zhuo","tone":1},
-  {"word":"椅","py":"yi","tone":3},
-  {"word":"车","py":"che","tone":1},
-  {"word":"船","py":"chuan","tone":2},
-  {"word":"机","py":"ji","tone":1},
-  {"word":"路","py":"lu","tone":4}
+  {
+    "word": "一",
+    "py": "yi",
+    "sm": "y",
+    "ym": "i",
+    "tone": 1
+  },
+  {
+    "word": "二",
+    "py": "er",
+    "sm": "",
+    "ym": "er",
+    "tone": 4
+  },
+  {
+    "word": "三",
+    "py": "san",
+    "sm": "s",
+    "ym": "an",
+    "tone": 1
+  },
+  {
+    "word": "四",
+    "py": "si",
+    "sm": "s",
+    "ym": "i",
+    "tone": 4
+  },
+  {
+    "word": "五",
+    "py": "wu",
+    "sm": "w",
+    "ym": "u",
+    "tone": 3
+  },
+  {
+    "word": "六",
+    "py": "liu",
+    "sm": "l",
+    "ym": "iu",
+    "tone": 4
+  },
+  {
+    "word": "七",
+    "py": "qi",
+    "sm": "q",
+    "ym": "i",
+    "tone": 1
+  },
+  {
+    "word": "八",
+    "py": "ba",
+    "sm": "b",
+    "ym": "a",
+    "tone": 1
+  },
+  {
+    "word": "九",
+    "py": "jiu",
+    "sm": "j",
+    "ym": "iu",
+    "tone": 3
+  },
+  {
+    "word": "十",
+    "py": "shi",
+    "sm": "sh",
+    "ym": "i",
+    "tone": 2
+  },
+  {
+    "word": "人",
+    "py": "ren",
+    "sm": "r",
+    "ym": "en",
+    "tone": 2
+  },
+  {
+    "word": "口",
+    "py": "kou",
+    "sm": "k",
+    "ym": "ou",
+    "tone": 3
+  },
+  {
+    "word": "手",
+    "py": "shou",
+    "sm": "sh",
+    "ym": "ou",
+    "tone": 3
+  },
+  {
+    "word": "足",
+    "py": "zu",
+    "sm": "z",
+    "ym": "u",
+    "tone": 2
+  },
+  {
+    "word": "目",
+    "py": "mu",
+    "sm": "m",
+    "ym": "u",
+    "tone": 4
+  },
+  {
+    "word": "耳",
+    "py": "er",
+    "sm": "",
+    "ym": "er",
+    "tone": 3
+  },
+  {
+    "word": "日",
+    "py": "ri",
+    "sm": "r",
+    "ym": "i",
+    "tone": 4
+  },
+  {
+    "word": "月",
+    "py": "yue",
+    "sm": "y",
+    "ym": "ue",
+    "tone": 4
+  },
+  {
+    "word": "水",
+    "py": "shui",
+    "sm": "sh",
+    "ym": "ui",
+    "tone": 3
+  },
+  {
+    "word": "火",
+    "py": "huo",
+    "sm": "h",
+    "ym": "uo",
+    "tone": 3
+  },
+  {
+    "word": "山",
+    "py": "shan",
+    "sm": "sh",
+    "ym": "an",
+    "tone": 1
+  },
+  {
+    "word": "石",
+    "py": "shi",
+    "sm": "sh",
+    "ym": "i",
+    "tone": 2
+  },
+  {
+    "word": "田",
+    "py": "tian",
+    "sm": "t",
+    "ym": "ian",
+    "tone": 2
+  },
+  {
+    "word": "土",
+    "py": "tu",
+    "sm": "t",
+    "ym": "u",
+    "tone": 3
+  },
+  {
+    "word": "木",
+    "py": "mu",
+    "sm": "m",
+    "ym": "u",
+    "tone": 4
+  },
+  {
+    "word": "花",
+    "py": "hua",
+    "sm": "h",
+    "ym": "ua",
+    "tone": 1
+  },
+  {
+    "word": "鸟",
+    "py": "niao",
+    "sm": "n",
+    "ym": "iao",
+    "tone": 3
+  },
+  {
+    "word": "虫",
+    "py": "chong",
+    "sm": "ch",
+    "ym": "ong",
+    "tone": 2
+  },
+  {
+    "word": "鱼",
+    "py": "yu",
+    "sm": "y",
+    "ym": "u",
+    "tone": 2
+  },
+  {
+    "word": "马",
+    "py": "ma",
+    "sm": "m",
+    "ym": "a",
+    "tone": 3
+  },
+  {
+    "word": "牛",
+    "py": "niu",
+    "sm": "n",
+    "ym": "iu",
+    "tone": 2
+  },
+  {
+    "word": "羊",
+    "py": "yang",
+    "sm": "y",
+    "ym": "ang",
+    "tone": 2
+  },
+  {
+    "word": "狗",
+    "py": "gou",
+    "sm": "g",
+    "ym": "ou",
+    "tone": 3
+  },
+  {
+    "word": "猫",
+    "py": "mao",
+    "sm": "m",
+    "ym": "ao",
+    "tone": 1
+  },
+  {
+    "word": "兔",
+    "py": "tu",
+    "sm": "t",
+    "ym": "u",
+    "tone": 4
+  },
+  {
+    "word": "龙",
+    "py": "long",
+    "sm": "l",
+    "ym": "ong",
+    "tone": 2
+  },
+  {
+    "word": "红",
+    "py": "hong",
+    "sm": "h",
+    "ym": "ong",
+    "tone": 2
+  },
+  {
+    "word": "白",
+    "py": "bai",
+    "sm": "b",
+    "ym": "ai",
+    "tone": 2
+  },
+  {
+    "word": "黑",
+    "py": "hei",
+    "sm": "h",
+    "ym": "ei",
+    "tone": 1
+  },
+  {
+    "word": "大",
+    "py": "da",
+    "sm": "d",
+    "ym": "a",
+    "tone": 4
+  },
+  {
+    "word": "小",
+    "py": "xiao",
+    "sm": "x",
+    "ym": "iao",
+    "tone": 3
+  },
+  {
+    "word": "多",
+    "py": "duo",
+    "sm": "d",
+    "ym": "uo",
+    "tone": 1
+  },
+  {
+    "word": "少",
+    "py": "shao",
+    "sm": "sh",
+    "ym": "ao",
+    "tone": 3
+  },
+  {
+    "word": "上",
+    "py": "shang",
+    "sm": "sh",
+    "ym": "ang",
+    "tone": 4
+  },
+  {
+    "word": "下",
+    "py": "xia",
+    "sm": "x",
+    "ym": "ia",
+    "tone": 4
+  },
+  {
+    "word": "左",
+    "py": "zuo",
+    "sm": "z",
+    "ym": "uo",
+    "tone": 3
+  },
+  {
+    "word": "右",
+    "py": "you",
+    "sm": "y",
+    "ym": "ou",
+    "tone": 4
+  },
+  {
+    "word": "前",
+    "py": "qian",
+    "sm": "q",
+    "ym": "ian",
+    "tone": 2
+  },
+  {
+    "word": "后",
+    "py": "hou",
+    "sm": "h",
+    "ym": "ou",
+    "tone": 4
+  },
+  {
+    "word": "来",
+    "py": "lai",
+    "sm": "l",
+    "ym": "ai",
+    "tone": 2
+  },
+  {
+    "word": "去",
+    "py": "qu",
+    "sm": "q",
+    "ym": "u",
+    "tone": 4
+  },
+  {
+    "word": "开",
+    "py": "kai",
+    "sm": "k",
+    "ym": "ai",
+    "tone": 1
+  },
+  {
+    "word": "关",
+    "py": "guan",
+    "sm": "g",
+    "ym": "uan",
+    "tone": 1
+  },
+  {
+    "word": "天",
+    "py": "tian",
+    "sm": "t",
+    "ym": "ian",
+    "tone": 1
+  },
+  {
+    "word": "地",
+    "py": "di",
+    "sm": "d",
+    "ym": "i",
+    "tone": 4
+  },
+  {
+    "word": "风",
+    "py": "feng",
+    "sm": "f",
+    "ym": "eng",
+    "tone": 1
+  },
+  {
+    "word": "云",
+    "py": "yun",
+    "sm": "y",
+    "ym": "un",
+    "tone": 2
+  },
+  {
+    "word": "雨",
+    "py": "yu",
+    "sm": "y",
+    "ym": "u",
+    "tone": 3
+  },
+  {
+    "word": "雪",
+    "py": "xue",
+    "sm": "x",
+    "ym": "ue",
+    "tone": 3
+  },
+  {
+    "word": "电",
+    "py": "dian",
+    "sm": "d",
+    "ym": "ian",
+    "tone": 4
+  },
+  {
+    "word": "春",
+    "py": "chun",
+    "sm": "ch",
+    "ym": "un",
+    "tone": 1
+  },
+  {
+    "word": "夏",
+    "py": "xia",
+    "sm": "x",
+    "ym": "ia",
+    "tone": 4
+  },
+  {
+    "word": "秋",
+    "py": "qiu",
+    "sm": "q",
+    "ym": "iu",
+    "tone": 1
+  },
+  {
+    "word": "冬",
+    "py": "dong",
+    "sm": "d",
+    "ym": "ong",
+    "tone": 1
+  },
+  {
+    "word": "爸",
+    "py": "ba",
+    "sm": "b",
+    "ym": "a",
+    "tone": 4
+  },
+  {
+    "word": "妈",
+    "py": "ma",
+    "sm": "m",
+    "ym": "a",
+    "tone": 1
+  },
+  {
+    "word": "哥",
+    "py": "ge",
+    "sm": "g",
+    "ym": "e",
+    "tone": 1
+  },
+  {
+    "word": "姐",
+    "py": "jie",
+    "sm": "j",
+    "ym": "ie",
+    "tone": 3
+  },
+  {
+    "word": "弟",
+    "py": "di",
+    "sm": "d",
+    "ym": "i",
+    "tone": 4
+  },
+  {
+    "word": "妹",
+    "py": "mei",
+    "sm": "m",
+    "ym": "ei",
+    "tone": 4
+  },
+  {
+    "word": "我",
+    "py": "wo",
+    "sm": "w",
+    "ym": "o",
+    "tone": 3
+  },
+  {
+    "word": "你",
+    "py": "ni",
+    "sm": "n",
+    "ym": "i",
+    "tone": 3
+  },
+  {
+    "word": "他",
+    "py": "ta",
+    "sm": "t",
+    "ym": "a",
+    "tone": 1
+  },
+  {
+    "word": "她",
+    "py": "ta",
+    "sm": "t",
+    "ym": "a",
+    "tone": 1
+  },
+  {
+    "word": "好",
+    "py": "hao",
+    "sm": "h",
+    "ym": "ao",
+    "tone": 3
+  },
+  {
+    "word": "爱",
+    "py": "ai",
+    "sm": "",
+    "ym": "ai",
+    "tone": 4
+  },
+  {
+    "word": "吃",
+    "py": "chi",
+    "sm": "ch",
+    "ym": "i",
+    "tone": 1
+  },
+  {
+    "word": "喝",
+    "py": "he",
+    "sm": "h",
+    "ym": "e",
+    "tone": 1
+  },
+  {
+    "word": "笑",
+    "py": "xiao",
+    "sm": "x",
+    "ym": "iao",
+    "tone": 4
+  },
+  {
+    "word": "哭",
+    "py": "ku",
+    "sm": "k",
+    "ym": "u",
+    "tone": 1
+  },
+  {
+    "word": "走",
+    "py": "zou",
+    "sm": "z",
+    "ym": "ou",
+    "tone": 3
+  },
+  {
+    "word": "跑",
+    "py": "pao",
+    "sm": "p",
+    "ym": "ao",
+    "tone": 3
+  },
+  {
+    "word": "飞",
+    "py": "fei",
+    "sm": "f",
+    "ym": "ei",
+    "tone": 1
+  },
+  {
+    "word": "看",
+    "py": "kan",
+    "sm": "k",
+    "ym": "an",
+    "tone": 4
+  },
+  {
+    "word": "听",
+    "py": "ting",
+    "sm": "t",
+    "ym": "ing",
+    "tone": 1
+  },
+  {
+    "word": "说",
+    "py": "shuo",
+    "sm": "sh",
+    "ym": "uo",
+    "tone": 1
+  },
+  {
+    "word": "读",
+    "py": "du",
+    "sm": "d",
+    "ym": "u",
+    "tone": 2
+  },
+  {
+    "word": "写",
+    "py": "xie",
+    "sm": "x",
+    "ym": "ie",
+    "tone": 3
+  },
+  {
+    "word": "书",
+    "py": "shu",
+    "sm": "sh",
+    "ym": "u",
+    "tone": 1
+  },
+  {
+    "word": "画",
+    "py": "hua",
+    "sm": "h",
+    "ym": "ua",
+    "tone": 4
+  },
+  {
+    "word": "学",
+    "py": "xue",
+    "sm": "x",
+    "ym": "ue",
+    "tone": 2
+  },
+  {
+    "word": "校",
+    "py": "xiao",
+    "sm": "x",
+    "ym": "iao",
+    "tone": 4
+  },
+  {
+    "word": "门",
+    "py": "men",
+    "sm": "m",
+    "ym": "en",
+    "tone": 2
+  },
+  {
+    "word": "窗",
+    "py": "chuang",
+    "sm": "ch",
+    "ym": "uang",
+    "tone": 1
+  },
+  {
+    "word": "床",
+    "py": "chuang",
+    "sm": "ch",
+    "ym": "uang",
+    "tone": 2
+  },
+  {
+    "word": "灯",
+    "py": "deng",
+    "sm": "d",
+    "ym": "eng",
+    "tone": 1
+  },
+  {
+    "word": "桌",
+    "py": "zhuo",
+    "sm": "zh",
+    "ym": "uo",
+    "tone": 1
+  },
+  {
+    "word": "椅",
+    "py": "yi",
+    "sm": "y",
+    "ym": "i",
+    "tone": 3
+  },
+  {
+    "word": "车",
+    "py": "che",
+    "sm": "ch",
+    "ym": "e",
+    "tone": 1
+  },
+  {
+    "word": "船",
+    "py": "chuan",
+    "sm": "ch",
+    "ym": "uan",
+    "tone": 2
+  },
+  {
+    "word": "机",
+    "py": "ji",
+    "sm": "j",
+    "ym": "i",
+    "tone": 1
+  },
+  {
+    "word": "路",
+    "py": "lu",
+    "sm": "l",
+    "ym": "u",
+    "tone": 4
+  }
 ]
