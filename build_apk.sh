@@ -19,7 +19,9 @@ echo "==> 1. compile java"
 rm -rf "$OBJ"; mkdir -p "$OBJ"
 javac -encoding UTF-8 -source 17 -target 17 -cp "$AJ" -d "$OBJ" \
   "$ROOT/src/com/cuixinyuan/pinyin/MainActivity.java" \
-  "$ROOT/src/com/cuixinyuan/pinyin/SnakeView.java"
+  "$ROOT/src/com/cuixinyuan/pinyin/SnakeView.java" \
+  "$ROOT/src/com/cuixinyuan/pinyin/TetrisView.java" \
+  "$ROOT/src/com/cuixinyuan/pinyin/FruitNinjaView.java"
 echo "    java classes: $(ls "$OBJ/com/cuixinyuan/pinyin" | wc -l) files"
 
 echo "==> 2. d8 dex"

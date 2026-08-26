@@ -4,10 +4,14 @@ import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
+import android.graphics.RectF;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.MotionEvent;
 import android.view.View;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -15,8 +19,9 @@ import java.util.Random;
 
 /**
  * 贪吃蛇小游戏视图（用于识字练习后的奖励环节）。
- * 游戏进度（蛇身、得分）保存在本对象中，跨多次奖励环节持续累积，
- * 因此「条件达成后可继续进行游戏」。
+ * - 蛇头采用仿真样式（眼睛 + 舌头 + 朝向）。
+ * - 食物生成避开屏幕边缘区域，降低难度。
+ * - 游戏进度（蛇身、方向、食物、得分）以 JSON 形式持久化，跨多次奖励环节持续累积。
  */
 public class SnakeView extends View {
 
@@ -42,6 +47,9 @@ public class SnakeView extends View {
     private final Paint headPaint;
     private final Paint foodPaint;
     private final Paint borderPaint;
+    private final Paint eyeWhite;
+    private final Paint eyeBlack;
+    private final Paint tonguePaint;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Random rnd = new Random();
@@ -57,7 +65,7 @@ public class SnakeView extends View {
         snakePaint.setColor(Color.parseColor("#AED581"));
         snakePaint.setStyle(Paint.Style.FILL);
         headPaint = new Paint();
-        headPaint.setColor(Color.parseColor("#FFEB3B"));
+        headPaint.setColor(Color.parseColor("#66BB6A"));
         headPaint.setStyle(Paint.Style.FILL);
         foodPaint = new Paint();
         foodPaint.setColor(Color.parseColor("#EF5350"));
@@ -66,6 +74,17 @@ public class SnakeView extends View {
         borderPaint.setColor(Color.parseColor("#0D3B0D"));
         borderPaint.setStyle(Paint.Style.STROKE);
         borderPaint.setStrokeWidth(4);
+        eyeWhite = new Paint();
+        eyeWhite.setColor(Color.WHITE);
+        eyeWhite.setStyle(Paint.Style.FILL);
+        eyeBlack = new Paint();
+        eyeBlack.setColor(Color.BLACK);
+        eyeBlack.setStyle(Paint.Style.FILL);
+        tonguePaint = new Paint();
+        tonguePaint.setColor(Color.parseColor("#E53935"));
+        tonguePaint.setStyle(Paint.Style.STROKE);
+        tonguePaint.setStrokeWidth(3);
+        tonguePaint.setStrokeCap(Paint.Cap.ROUND);
         reset();
     }
 
@@ -75,7 +94,7 @@ public class SnakeView extends View {
 
     public void setScoreListener(ScoreListener l) { this.scoreListener = l; }
 
-    /** 仅重置得分（用于跨进程恢复等场景） */
+    /** 仅设置得分（用于跨进程恢复等场景） */
     public void setScore(int s) { this.score = s; }
 
     public int getScore() { return score; }
@@ -104,10 +123,16 @@ public class SnakeView extends View {
         placeFood();
     }
 
+    /** 食物生成避开屏幕边缘（留出 2 格边距） */
     private void placeFood() {
-        for (int tries = 0; tries < 1000; tries++) {
-            int fx = rnd.nextInt(cols);
-            int fy = rnd.nextInt(rows);
+        int minX = 2, maxX = cols - 3;
+        int minY = 2, maxY = rows - 3;
+        if (maxX < minX || maxY < minY) { // 极小屏兜底
+            minX = 0; maxX = cols - 1; minY = 0; maxY = rows - 1;
+        }
+        for (int tries = 0; tries < 2000; tries++) {
+            int fx = minX + rnd.nextInt(maxX - minX + 1);
+            int fy = minY + rnd.nextInt(maxY - minY + 1);
             boolean hit = false;
             for (int[] s : snake) {
                 if (s[0] == fx && s[1] == fy) { hit = true; break; }
@@ -176,7 +201,6 @@ public class SnakeView extends View {
             sized = true;
             reset();
         } else {
-            // 尺寸变化后确保食物在范围内
             if (food[1] >= rows) placeFood();
         }
     }
@@ -193,15 +217,62 @@ public class SnakeView extends View {
         // 蛇身（从尾到头，蛇头最后画以免被覆盖）
         for (int i = snake.size() - 1; i >= 0; i--) {
             int[] s = snake.get(i);
-            Paint p = (i == 0) ? headPaint : snakePaint;
             float x = ox + s[0] * cell;
             float y = oy + s[1] * cell;
-            canvas.drawRect(x + 1, y + 1, x + cell - 1, y + cell - 1, p);
+            if (i == 0) {
+                drawHead(canvas, x, y);
+            } else {
+                canvas.drawRoundRect(new RectF(x + 1, y + 1, x + cell - 1, y + cell - 1),
+                        cell * 0.3f, cell * 0.3f, snakePaint);
+            }
         }
-        // 食物
+        // 食物（苹果样式）
         float fx = ox + food[0] * cell;
         float fy = oy + food[1] * cell;
         canvas.drawCircle(fx + cell / 2, fy + cell / 2, cell / 2 - 2, foodPaint);
+        // 苹果梗
+        tonguePaint.setColor(Color.parseColor("#33691E"));
+        canvas.drawLine(fx + cell / 2, fy + 1, fx + cell / 2 + cell * 0.15f, fy - cell * 0.15f, tonguePaint);
+        tonguePaint.setColor(Color.parseColor("#E53935"));
+    }
+
+    /** 仿真蛇头：圆角方块 + 眼睛（随朝向）+ 分叉舌头 */
+    private void drawHead(Canvas canvas, float x, float y) {
+        float pad = 1;
+        canvas.drawRoundRect(new RectF(x + pad, y + pad, x + cell - pad, y + cell - pad),
+                cell * 0.35f, cell * 0.35f, headPaint);
+
+        float cx = x + cell / 2;
+        float cy = y + cell / 2;
+        float r = cell * 0.16f;           // 眼睛半径
+        float off = cell * 0.22f;         // 眼睛距中心
+        float front = cell * 0.30f;       // 眼睛朝向前方
+
+        // 朝向单位向量
+        float dx = 0, dy = 0;
+        if (dir == DIR_UP) dy = -1;
+        else if (dir == DIR_DOWN) dy = 1;
+        else if (dir == DIR_LEFT) dx = -1;
+        else dx = 1;
+
+        // 眼睛位置：沿朝向前方，并向两侧（垂直方向）分开
+        float px = -dy, py = dx; // 垂直向量
+        for (int s = -1; s <= 1; s += 2) {
+            float ex = cx + dx * front + px * off * s;
+            float ey = cy + dy * front + py * off * s;
+            canvas.drawCircle(ex, ey, r, eyeWhite);
+            canvas.drawCircle(ex + dx * r * 0.3f, ey + dy * r * 0.3f, r * 0.5f, eyeBlack);
+        }
+
+        // 分叉舌头：从前方中心伸出
+        float tx = cx + dx * (cell * 0.5f);
+        float ty = cy + dy * (cell * 0.5f);
+        float fx = cx + dx * (cell * 0.85f);
+        float fy = cy + dy * (cell * 0.85f);
+        canvas.drawLine(tx, ty, fx, fy, tonguePaint);
+        // 分叉
+        canvas.drawLine(fx, fy, fx + dx * cell * 0.12f + px * cell * 0.12f, fy + dy * cell * 0.12f + py * cell * 0.12f, tonguePaint);
+        canvas.drawLine(fx, fy, fx + dx * cell * 0.12f - px * cell * 0.12f, fy + dy * cell * 0.12f - py * cell * 0.12f, tonguePaint);
     }
 
     // 滑动控制方向
@@ -223,5 +294,51 @@ public class SnakeView extends View {
             }
         }
         return true;
+    }
+
+    // ===================== 持久化 =====================
+    public JSONObject saveState() {
+        try {
+            JSONObject o = new JSONObject();
+            o.put("score", score);
+            o.put("dir", dir);
+            o.put("pendingDir", pendingDir);
+            JSONArray body = new JSONArray();
+            for (int[] s : snake) {
+                JSONArray seg = new JSONArray();
+                seg.put(s[0]); seg.put(s[1]);
+                body.put(seg);
+            }
+            o.put("body", body);
+            JSONArray f = new JSONArray();
+            f.put(food[0]); f.put(food[1]);
+            o.put("food", f);
+            return o;
+        } catch (Exception e) {
+            return new JSONObject();
+        }
+    }
+
+    public void restoreState(JSONObject o) {
+        if (o == null) return;
+        try {
+            score = o.optInt("score", score);
+            dir = o.optInt("dir", DIR_RIGHT);
+            pendingDir = o.optInt("pendingDir", DIR_RIGHT);
+            JSONArray body = o.optJSONArray("body");
+            if (body != null && body.length() > 0) {
+                snake.clear();
+                for (int i = 0; i < body.length(); i++) {
+                    JSONArray seg = body.getJSONArray(i);
+                    snake.add(new int[]{seg.getInt(0), seg.getInt(1)});
+                }
+            }
+            JSONArray f = o.optJSONArray("food");
+            if (f != null && f.length() == 2) {
+                food[0] = f.getInt(0); food[1] = f.getInt(1);
+            }
+        } catch (Exception e) {
+            // 解析失败则保持现状
+        }
     }
 }

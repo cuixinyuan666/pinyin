@@ -27,9 +27,12 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 
@@ -37,82 +40,94 @@ import java.util.Set;
  * 拼音识字乐园 —— 面向小学生的识字练习工具（仅适配安卓手机）
  *
  * 玩法：
- *   1. 每轮展示 10 个汉字，学生为每个汉字分别选择匹配的「声母」「韵母」「声调」。
- *   2. 每道题作答结束后，自动用语音朗读该汉字的读音。
- *   3. 每完成 10 道题目，奖励一分钟的「贪吃蛇」小游戏游玩时长；
- *      游戏结束后回到答题环节；贪吃蛇的游戏进度（蛇身、得分）跨轮保留，
- *      条件达成后可继续进行游戏。
+ *   1. 每轮展示 10 个汉字，学生为每个汉字分别选择「声母」「韵母」「声调」。
+ *   2. 拼音交互：点击任一拼音字母即朗读该字母；整题作答完成后整段拼读（声母+带调韵母+汉字）。
+ *      声调不再固定读“啊”，而是跟随对应汉字的韵母发声。
+ *   3. 每完成 10 道题目，弹出小游戏选择界面（贪吃蛇 / 俄罗斯方块 / 切水果），奖励 60 秒游玩；
+ *      三款游戏均持久化保存进度。
+ *   4. 每学完 10 个汉字，触发一轮检测复习（艾宾浩斯混合编排，新学+旧字，显示已学次数）。
  */
 public class MainActivity extends Activity implements TextToSpeech.OnInitListener {
 
     // ====== 基础配置 ======
     private static final String WORD_ASSET = "words.json";
     private static final int ROUND_SIZE = 10;
-    private static final int REWARD_SECONDS = 60; // 奖励贪吃蛇游玩时长
+    private static final int REVIEW_SIZE = 10;
+    private static final int REWARD_SECONDS = 60;
     private static final String PREFS = "pinyin_prefs";
-    private static final String KEY_SNAKE_SCORE = "snake_score";
+    private static final String KEY_SNAKE = "game_snake";
+    private static final String KEY_TETRIS = "game_tetris";
+    private static final String KEY_FRUIT = "game_fruit";
+    private static final String KEY_LEARNED = "learned_map";
 
-    // 鼓励语（答对时随机显示）
     private static final String[] PRAISE = {
             "太棒啦！", "你真厉害！", "答对啦，真聪明！", "好样的！", "厉害厉害！", "你学会啦！"
     };
 
-    // 声调按钮（一声~四声），含声调符号与名称
     private static final String[] TONE_MARK = {"ā", "á", "ǎ", "à"};
     private static final String[] TONE_NAME = {"一声", "二声", "三声", "四声"};
 
     // ====== 数据 ======
     private static class Word {
         final String hanzi;
-        final String py;   // 不带声调的拼音音节，如 "ma"
-        final String sm;   // 声母，如 "m"；零声母时为 ""
-        final String ym;   // 韵母，如 "a"
-        final int tone;    // 1~4
+        final String py;
+        final String sm;
+        final String ym;
+        final int tone;
         Word(String hanzi, String py, String sm, String ym, int tone) {
             this.hanzi = hanzi; this.py = py; this.sm = sm; this.ym = ym; this.tone = tone;
         }
     }
 
     private final List<Word> dictionary = new ArrayList<>();
+    private final Map<String, Word> wordByHanzi = new HashMap<>();
+    private final Set<String> tonedSet = new HashSet<>();
     private final List<String> smPool = new ArrayList<>();
     private final List<String> ymPool = new ArrayList<>();
     private final Random rng = new Random();
 
+    // 已学习记录：hanzi -> {count, lastSeen}
+    private final Map<String, long[]> learned = new LinkedHashMap<>();
+
     // ====== 运行时状态 ======
     private List<Word> roundWords = new ArrayList<>();
+    private List<Word> lastRoundWords = new ArrayList<>();
     private int currentIndex = 0;
     private String selectedSm = null;
     private String selectedYm = null;
     private Integer selectedTone = null;
     private boolean itemSolved = false;
+    private boolean reviewDue = false;
 
-    // ====== 语音朗读 ======
+    // 复习
+    private List<ReviewQ> reviewQs = new ArrayList<>();
+    private int reviewIndex = 0;
+    private static class ReviewQ { Word w; List<String> opts; int correct; int learnedCount; }
+
+    // ====== 语音 ======
     private TextToSpeech tts;
     private boolean ttsReady = false;
 
-    // ====== 贪吃蛇奖励 ======
-    private SnakeView snakeView;
+    // ====== 游戏 ======
+    private static final int GAME_SNAKE = 0, GAME_TETRIS = 1, GAME_FRUIT = 2;
+    private int activeGame = -1;
     private boolean inGame = false;
     private int timeLeft = REWARD_SECONDS;
+    private View activeGameView = null;
 
     // ====== UI ======
     private FrameLayout root;
-    private ScrollView quizScroll;
-    private LinearLayout quizPanel;
-    private FrameLayout gamePanel;
+    private ScrollView quizScroll, reviewScroll;
+    private LinearLayout quizPanel, reviewPanel;
+    private LinearLayout gameHost;
+    private FrameLayout gameArea, controlPad, selectOverlay;
 
-    private TextView tvProgress;
+    private TextView tvProgress, tvHanzi, tvFeedback, tvReviewProgress, tvReviewHint, tvReviewChar, tvReviewFeedback;
     private ProgressBar progressBar;
-    private TextView tvHanzi;
-    private Button btnSpeak;
-    private TextView tvFeedback;
-    private LinearLayout smRow;
-    private LinearLayout ymRow;
-    private LinearLayout toneRow;
-    private Button btnNext;
+    private Button btnSpeak, btnNext, btnReviewNext;
+    private LinearLayout smRow, ymRow, toneRow, reviewOpts;
 
-    private TextView tvTime;
-    private TextView tvScore;
+    private TextView tvTime, tvScore, tvLives, tvGameTitle;
     private Button btnEndGame;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
@@ -121,6 +136,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         loadDictionary();
+        loadLearned();
         tts = new TextToSpeech(this, this);
         buildUi();
         startNewRound();
@@ -136,27 +152,61 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
             while ((line = r.readLine()) != null) sb.append(line);
             r.close();
             JSONArray arr = new JSONArray(sb.toString());
-            Set<String> smSet = new HashSet<>();
-            Set<String> ymSet = new HashSet<>();
+            Set<String> smSet = new HashSet<>(), ymSet = new HashSet<>();
             for (int i = 0; i < arr.length(); i++) {
                 JSONObject o = arr.getJSONObject(i);
                 Word w = new Word(o.getString("word"), o.getString("py"),
                         o.getString("sm"), o.getString("ym"), o.getInt("tone"));
                 dictionary.add(w);
-                smSet.add(w.sm);
-                ymSet.add(w.ym);
+                wordByHanzi.put(w.hanzi, w);
+                smSet.add(w.sm); ymSet.add(w.ym);
+                tonedSet.add(tonedPinyin(w.py, w.tone));
             }
-            smPool.addAll(smSet);
-            ymPool.addAll(ymSet);
+            smPool.addAll(smSet); ymPool.addAll(ymSet);
         } catch (Exception e) {
-            // 兜底：即便资源缺失也能运行
             dictionary.add(new Word("你", "ni", "n", "i", 3));
             dictionary.add(new Word("好", "hao", "h", "ao", 3));
             dictionary.add(new Word("妈", "ma", "m", "a", 1));
             dictionary.add(new Word("爸", "ba", "b", "a", 4));
             smPool.add("n"); smPool.add("h"); smPool.add("m"); smPool.add("b");
             ymPool.add("i"); ymPool.add("ao"); ymPool.add("a");
+            for (Word w : dictionary) { wordByHanzi.put(w.hanzi, w); tonedSet.add(tonedPinyin(w.py, w.tone)); }
         }
+    }
+
+    private void loadLearned() {
+        try {
+            String s = getSharedPreferences(PREFS, MODE_PRIVATE).getString(KEY_LEARNED, null);
+            if (s != null) {
+                JSONObject o = new JSONObject(s);
+                JSONArray keys = o.names();
+                if (keys != null) for (int i = 0; i < keys.length(); i++) {
+                    String k = keys.getString(i);
+                    JSONArray v = o.getJSONArray(k);
+                    learned.put(k, new long[]{v.getLong(0), v.getLong(1)});
+                }
+            }
+        } catch (Exception e) { /* 忽略 */ }
+    }
+
+    private void saveLearned() {
+        try {
+            JSONObject o = new JSONObject();
+            for (Map.Entry<String, long[]> e : learned.entrySet()) {
+                JSONArray v = new JSONArray();
+                v.put(e.getValue()[0]); v.put(e.getValue()[1]);
+                o.put(e.getKey(), v);
+            }
+            getSharedPreferences(PREFS, MODE_PRIVATE).edit().putString(KEY_LEARNED, o.toString()).apply();
+        } catch (Exception e) { /* 忽略 */ }
+    }
+
+    private void markLearned(Word w) {
+        long[] v = learned.get(w.hanzi);
+        long now = System.currentTimeMillis();
+        if (v == null) learned.put(w.hanzi, new long[]{1, now});
+        else { v[0]++; v[1] = now; }
+        saveLearned();
     }
 
     // ===================== UI 构建 =====================
@@ -165,26 +215,27 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         root.setBackgroundColor(Color.parseColor("#FFF7E6"));
         setContentView(root);
 
-        buildQuizPanel();
-        buildGamePanel();
+        buildQuiz();
+        buildReview();
+        buildGameHost();
+        buildSelect();
 
-        // 默认显示答题面板
         quizScroll.setVisibility(View.VISIBLE);
-        gamePanel.setVisibility(View.GONE);
+        reviewScroll.setVisibility(View.GONE);
+        gameHost.setVisibility(View.GONE);
+        selectOverlay.setVisibility(View.GONE);
     }
 
-    private void buildQuizPanel() {
+    private void buildQuiz() {
         quizPanel = new LinearLayout(this);
         quizPanel.setOrientation(LinearLayout.VERTICAL);
         quizPanel.setGravity(Gravity.CENTER_HORIZONTAL);
         quizPanel.setPadding(dp(16), dp(16), dp(16), dp(16));
-
         quizScroll = new ScrollView(this);
         quizScroll.addView(quizPanel);
         root.addView(quizScroll, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
-        // 进度
         LinearLayout top = new LinearLayout(this);
         top.setOrientation(LinearLayout.VERTICAL);
         top.setGravity(Gravity.CENTER);
@@ -192,45 +243,37 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         progressBar = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
         progressBar.setMax(ROUND_SIZE);
         progressBar.setProgress(1);
-        progressBar.setLayoutParams(new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, dp(12)));
-        top.addView(tvProgress);
-        top.addView(progressBar);
+        progressBar.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(12)));
+        top.addView(tvProgress); top.addView(progressBar);
         quizPanel.addView(top);
 
-        // 汉字大字
         tvHanzi = textView("", 96, Color.parseColor("#E64A19"), true);
         tvHanzi.setPadding(dp(0), dp(14), dp(0), dp(6));
         quizPanel.addView(tvHanzi);
 
-        // 听一听按钮
         btnSpeak = button("🔊 听一听", Color.parseColor("#FFB74D"), Color.WHITE);
         btnSpeak.setTextSize(TypedValue.COMPLEX_UNIT_SP, 18);
-        btnSpeak.setOnClickListener(v -> speakCurrent());
-        LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, dp(44));
+        btnSpeak.setOnClickListener(v -> speakBlend(currentWord()));
+        LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(44));
         sp.setMargins(dp(0), dp(2), dp(0), dp(6));
         btnSpeak.setLayoutParams(sp);
         quizPanel.addView(btnSpeak);
 
         quizPanel.addView(textView("请选择它的「声母」", 16, Color.parseColor("#5D4037"), false));
         smRow = new LinearLayout(this);
-        smRow.setOrientation(LinearLayout.HORIZONTAL);
-        smRow.setGravity(Gravity.CENTER);
+        smRow.setOrientation(LinearLayout.HORIZONTAL); smRow.setGravity(Gravity.CENTER);
         smRow.setPadding(dp(0), dp(6), dp(0), dp(6));
         quizPanel.addView(smRow);
 
         quizPanel.addView(textView("请选择它的「韵母」", 16, Color.parseColor("#5D4037"), false));
         ymRow = new LinearLayout(this);
-        ymRow.setOrientation(LinearLayout.HORIZONTAL);
-        ymRow.setGravity(Gravity.CENTER);
+        ymRow.setOrientation(LinearLayout.HORIZONTAL); ymRow.setGravity(Gravity.CENTER);
         ymRow.setPadding(dp(0), dp(6), dp(0), dp(6));
         quizPanel.addView(ymRow);
 
         quizPanel.addView(textView("请选择它的「声调」", 16, Color.parseColor("#5D4037"), false));
         toneRow = new LinearLayout(this);
-        toneRow.setOrientation(LinearLayout.HORIZONTAL);
-        toneRow.setGravity(Gravity.CENTER);
+        toneRow.setOrientation(LinearLayout.HORIZONTAL); toneRow.setGravity(Gravity.CENTER);
         toneRow.setPadding(dp(0), dp(6), dp(0), dp(6));
         quizPanel.addView(toneRow);
 
@@ -241,75 +284,136 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         btnNext = button("下一题 ➜", Color.parseColor("#FF7043"), Color.WHITE);
         btnNext.setEnabled(false);
         btnNext.setOnClickListener(v -> goNext());
-        LinearLayout.LayoutParams np = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, dp(56));
+        LinearLayout.LayoutParams np = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(56));
         np.setMargins(dp(0), dp(8), dp(0), dp(0));
         btnNext.setLayoutParams(np);
         quizPanel.addView(btnNext);
     }
 
-    private void buildGamePanel() {
-        gamePanel = new FrameLayout(this);
-        root.addView(gamePanel, new FrameLayout.LayoutParams(
+    private void buildReview() {
+        reviewPanel = new LinearLayout(this);
+        reviewPanel.setOrientation(LinearLayout.VERTICAL);
+        reviewPanel.setGravity(Gravity.CENTER_HORIZONTAL);
+        reviewPanel.setPadding(dp(16), dp(16), dp(16), dp(16));
+        reviewScroll = new ScrollView(this);
+        reviewScroll.addView(reviewPanel);
+        root.addView(reviewScroll, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
-        // 贪吃蛇画布
-        snakeView = new SnakeView(this);
-        gamePanel.addView(snakeView, new FrameLayout.LayoutParams(
+        tvReviewProgress = textView("复习 1 / " + REVIEW_SIZE, 18, Color.parseColor("#5D4037"), true);
+        reviewPanel.addView(tvReviewProgress);
+
+        tvReviewHint = textView("", 15, Color.parseColor("#8D6E63"), false);
+        reviewPanel.addView(tvReviewHint);
+
+        tvReviewChar = textView("", 90, Color.parseColor("#E64A19"), true);
+        tvReviewChar.setPadding(dp(0), dp(10), dp(0), dp(6));
+        reviewPanel.addView(tvReviewChar);
+
+        reviewOpts = new LinearLayout(this);
+        reviewOpts.setOrientation(LinearLayout.VERTICAL);
+        reviewOpts.setGravity(Gravity.CENTER_HORIZONTAL);
+        reviewOpts.setPadding(dp(0), dp(8), dp(0), dp(8));
+        reviewPanel.addView(reviewOpts);
+
+        tvReviewFeedback = textView("", 20, Color.parseColor("#2E7D32"), true);
+        tvReviewFeedback.setPadding(dp(0), dp(8), dp(0), dp(8));
+        reviewPanel.addView(tvReviewFeedback);
+
+        btnReviewNext = button("下一题 ➜", Color.parseColor("#FF7043"), Color.WHITE);
+        btnReviewNext.setEnabled(false);
+        btnReviewNext.setOnClickListener(v -> nextReview());
+        LinearLayout.LayoutParams rp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(56));
+        rp.setMargins(dp(0), dp(8), dp(0), dp(0));
+        btnReviewNext.setLayoutParams(rp);
+        reviewPanel.addView(btnReviewNext);
+    }
+
+    private void buildGameHost() {
+        gameHost = new LinearLayout(this);
+        gameHost.setOrientation(LinearLayout.VERTICAL);
+        root.addView(gameHost, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
-        // 顶部信息条：剩余时间 + 得分 + 结束按钮
+        // 顶部信息条
         LinearLayout info = new LinearLayout(this);
         info.setOrientation(LinearLayout.HORIZONTAL);
         info.setGravity(Gravity.CENTER_VERTICAL);
         info.setPadding(dp(16), dp(16), dp(16), dp(16));
         info.setBackgroundColor(Color.parseColor("#CC000000"));
-
+        tvGameTitle = textView("", 16, Color.WHITE, true);
         tvTime = textView("剩余 60 秒", 18, Color.WHITE, true);
         tvScore = textView("得分 0", 18, Color.parseColor("#FFEB3B"), true);
-        btnEndGame = button("结束游戏", Color.parseColor("#EF5350"), Color.WHITE);
+        tvLives = textView("❤ 3", 18, Color.parseColor("#FF8A80"), true);
+        tvLives.setVisibility(View.GONE);
+        btnEndGame = button("结束", Color.parseColor("#EF5350"), Color.WHITE);
         btnEndGame.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
-        btnEndGame.setOnClickListener(v -> exitGame());
+        btnEndGame.setOnClickListener(v -> onGameEnded());
 
         LinearLayout.LayoutParams wt = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1);
-        tvTime.setLayoutParams(wt);
-        tvScore.setLayoutParams(wt);
-        LinearLayout.LayoutParams wb = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, dp(40));
-        btnEndGame.setLayoutParams(wb);
+        tvGameTitle.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        tvTime.setLayoutParams(wt); tvScore.setLayoutParams(wt); tvLives.setLayoutParams(wt);
+        LinearLayout.LayoutParams wb = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(40));
+        info.addView(tvGameTitle); info.addView(tvTime); info.addView(tvScore);
+        info.addView(tvLives); info.addView(btnEndGame);
+        gameHost.addView(info);
 
-        info.addView(tvTime);
-        info.addView(tvScore);
-        info.addView(btnEndGame);
+        gameArea = new FrameLayout(this);
+        LinearLayout.LayoutParams ga = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1);
+        gameHost.addView(gameArea, ga);
 
-        FrameLayout.LayoutParams ip = new FrameLayout.LayoutParams(
+        controlPad = new FrameLayout(this);
+        controlPad.setPadding(dp(8), dp(8), dp(8), dp(12));
+        gameHost.addView(controlPad, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+    }
+
+    private void buildSelect() {
+        selectOverlay = new FrameLayout(this);
+        selectOverlay.setBackgroundColor(Color.parseColor("#E6FFF3E0"));
+        root.addView(selectOverlay, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setGravity(Gravity.CENTER_HORIZONTAL);
+        box.setPadding(dp(24), dp(24), dp(24), dp(24));
+        FrameLayout.LayoutParams bp = new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        gamePanel.addView(info, ip);
+        bp.gravity = Gravity.CENTER;
+        selectOverlay.addView(box, bp);
 
-        // 底部提示
-        TextView hint = textView("滑动屏幕控制小蛇方向，吃到果子得分！", 16, Color.WHITE, false);
-        hint.setPadding(dp(16), dp(10), dp(16), dp(20));
-        FrameLayout.LayoutParams hp = new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        hp.gravity = Gravity.BOTTOM;
-        hint.setLayoutParams(hp);
-        gamePanel.addView(hint);
+        box.addView(textView("🎉 答对 10 题！选一个小游戏玩一会儿吧", 22, Color.parseColor("#E64A19"), true));
+        box.addView(textView("（每款游戏进度都会自动保存）", 15, Color.parseColor("#8D6E63"), false));
 
-        // 得分回调
-        snakeView.setScoreListener(score -> {
-            tvScore.setText("得分 " + score);
-            SharedPreferences.Editor ed = getSharedPreferences(PREFS, MODE_PRIVATE).edit();
-            ed.putInt(KEY_SNAKE_SCORE, score);
-            ed.apply();
-        });
+        box.addView(gameSelectButton("🐍 贪吃蛇", "#43A047", GAME_SNAKE));
+        box.addView(gameSelectButton("🧱 俄罗斯方块", "#1E88E5", GAME_TETRIS));
+        box.addView(gameSelectButton("🍉 切水果", "#FB8C00", GAME_FRUIT));
 
-        // 恢复历史最高/当前得分
-        int saved = getSharedPreferences(PREFS, MODE_PRIVATE).getInt(KEY_SNAKE_SCORE, 0);
-        snakeView.setScore(saved);
+        Button skip = button("先不玩，继续答题 ➜", Color.parseColor("#9E9E9E"), Color.WHITE);
+        skip.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
+        skip.setOnClickListener(v -> onGameEnded());
+        LinearLayout.LayoutParams sk = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(52));
+        sk.setMargins(dp(0), dp(8), dp(0), dp(0));
+        skip.setLayoutParams(sk);
+        box.addView(skip);
+    }
+
+    private Button gameSelectButton(String text, String color, final int game) {
+        Button b = button(text, Color.parseColor(color), Color.WHITE);
+        b.setTextSize(TypedValue.COMPLEX_UNIT_SP, 22);
+        b.setOnClickListener(v -> enterGame(game));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(64));
+        lp.setMargins(dp(0), dp(10), dp(0), dp(0));
+        b.setLayoutParams(lp);
+        return b;
     }
 
     // ===================== 答题流程 =====================
+    private Word currentWord() { return roundWords.get(currentIndex); }
+
     private void startNewRound() {
+        lastRoundWords = new ArrayList<>(roundWords);
         roundWords = pickWords(ROUND_SIZE);
         currentIndex = 0;
         showQuestion();
@@ -325,20 +429,14 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
 
     private void showQuestion() {
         itemSolved = false;
-        selectedSm = null;
-        selectedYm = null;
-        selectedTone = null;
-
-        Word w = roundWords.get(currentIndex);
+        selectedSm = null; selectedYm = null; selectedTone = null;
+        Word w = currentWord();
         tvProgress.setText("第 " + (currentIndex + 1) + " / " + ROUND_SIZE + " 题");
         progressBar.setProgress(currentIndex + 1);
         tvHanzi.setText(w.hanzi);
         tvFeedback.setText("");
         btnNext.setEnabled(false);
-
-        buildSmOptions(w);
-        buildYmOptions(w);
-        buildToneOptions();
+        buildSmOptions(w); buildYmOptions(w); buildToneOptions();
     }
 
     private void buildSmOptions(Word w) {
@@ -346,23 +444,18 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         List<String> opts = new ArrayList<>();
         opts.add(w.sm);
         List<String> pool = new ArrayList<>(smPool);
-        if (!w.sm.isEmpty()) pool.removeAll(Collections.singleton(""));
+        pool.remove("");
         pool.remove(w.sm);
         Collections.shuffle(pool, rng);
         for (int i = 0; i < 3 && i < pool.size(); i++) opts.add(pool.get(i));
         Collections.shuffle(opts, rng);
-
         for (final String s : opts) {
-            String label = s.isEmpty() ? "∅" : s;
+            String label = s.isEmpty() ? "∅（无）" : s;
             Button b = button(label, Color.WHITE, Color.parseColor("#37474F"));
-            b.setTextSize(TypedValue.COMPLEX_UNIT_SP, 34);
+            b.setTextSize(TypedValue.COMPLEX_UNIT_SP, 32);
             b.setTag(s);
-            b.setOnClickListener(v -> {
-                selectedSm = s;
-                highlight(smRow, s);
-                evaluate();
-            });
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(72), dp(72));
+            b.setOnClickListener(v -> { speakLetter(s, w); selectedSm = s; highlight(smRow, s); evaluate(); });
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(72), dp(64));
             lp.setMargins(dp(6), dp(4), dp(6), dp(4));
             b.setLayoutParams(lp);
             smRow.addView(b);
@@ -378,17 +471,12 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         Collections.shuffle(pool, rng);
         for (int i = 0; i < 3 && i < pool.size(); i++) opts.add(pool.get(i));
         Collections.shuffle(opts, rng);
-
         for (final String s : opts) {
             Button b = button(s, Color.WHITE, Color.parseColor("#37474F"));
-            b.setTextSize(TypedValue.COMPLEX_UNIT_SP, 30);
+            b.setTextSize(TypedValue.COMPLEX_UNIT_SP, 28);
             b.setTag(s);
-            b.setOnClickListener(v -> {
-                selectedYm = s;
-                highlight(ymRow, s);
-                evaluate();
-            });
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(78), dp(64));
+            b.setOnClickListener(v -> { speakLetter(s, w); selectedYm = s; highlight(ymRow, s); evaluate(); });
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(80), dp(60));
             lp.setMargins(dp(6), dp(4), dp(6), dp(4));
             b.setLayoutParams(lp);
             ymRow.addView(b);
@@ -403,9 +491,9 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
             b.setTextSize(TypedValue.COMPLEX_UNIT_SP, 18);
             b.setTag(t);
             b.setOnClickListener(v -> {
-                selectedTone = t;
-                highlight(toneRow, t);
-                evaluate();
+                // 声调跟随对应汉字的韵母发声（不再固定读“啊”）
+                speakLetter(tonedPinyin(currentWord().ym, t), currentWord());
+                selectedTone = t; highlight(toneRow, t); evaluate();
             });
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(72), dp(72));
             lp.setMargins(dp(4), dp(4), dp(4), dp(4));
@@ -416,9 +504,8 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
 
     private void evaluate() {
         if (selectedSm == null || selectedYm == null || selectedTone == null) return;
-        Word w = roundWords.get(currentIndex);
+        Word w = currentWord();
         boolean ok = selectedSm.equals(w.sm) && selectedYm.equals(w.ym) && selectedTone == w.tone;
-
         if (ok) {
             itemSolved = true;
             tvFeedback.setTextColor(Color.parseColor("#2E7D32"));
@@ -434,30 +521,111 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
             colorSelected(ymRow, selectedYm, Color.parseColor("#FFCDD2"));
             colorSelected(toneRow, selectedTone, Color.parseColor("#FFCDD2"));
         }
-        // 每道题作答结束后朗读该汉字的读音
-        speakCurrent();
+        // 整题作答完成后执行完整拼读播报
+        speakBlend(w);
     }
 
     private void goNext() {
         if (!itemSolved) return;
+        markLearned(currentWord());
         currentIndex++;
         if (currentIndex >= ROUND_SIZE) {
-            enterGame();
+            lastRoundWords = new ArrayList<>(roundWords); // 记录本轮新学 10 字
+            reviewDue = true;            // 学完 10 字，待会儿触发复习
+            showSelect();
         } else {
             showQuestion();
         }
     }
 
-    // ===================== 贪吃蛇奖励环节 =====================
-    private void enterGame() {
+    // ===================== 游戏选择 =====================
+    private void showSelect() {
+        quizScroll.setVisibility(View.GONE);
+        reviewScroll.setVisibility(View.GONE);
+        gameHost.setVisibility(View.GONE);
+        selectOverlay.setVisibility(View.VISIBLE);
+    }
+
+    private void enterGame(int game) {
+        activeGame = game;
         inGame = true;
         timeLeft = REWARD_SECONDS;
-        tvTime.setText("剩余 " + timeLeft + " 秒");
-        tvScore.setText("得分 " + snakeView.getScore());
+        selectOverlay.setVisibility(View.GONE);
+        gameHost.setVisibility(View.VISIBLE);
+        reviewScroll.setVisibility(View.GONE);
         quizScroll.setVisibility(View.GONE);
-        gamePanel.setVisibility(View.VISIBLE);
-        snakeView.startGame();
+
+        gameArea.removeAllViews();
+        controlPad.removeAllViews();
+        tvLives.setVisibility(View.GONE);
+
+        if (game == GAME_SNAKE) {
+            tvGameTitle.setText("🐍 贪吃蛇");
+            SnakeView sv = new SnakeView(this);
+            sv.restoreState(loadJson(KEY_SNAKE));
+            sv.setScoreListener(s -> { tvScore.setText("得分 " + s); });
+            gameArea.addView(sv, new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            activeGameView = sv;
+            buildSnakeControls(sv);
+        } else if (game == GAME_TETRIS) {
+            tvGameTitle.setText("🧱 俄罗斯方块");
+            TetrisView tv = new TetrisView(this);
+            tv.restoreState(loadJson(KEY_TETRIS));
+            tv.setScoreListener(s -> tvScore.setText("得分 " + s));
+            gameArea.addView(tv, new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            activeGameView = tv;
+            buildTetrisControls(tv);
+        } else {
+            tvGameTitle.setText("🍉 切水果");
+            FruitNinjaView fv = new FruitNinjaView(this);
+            fv.restoreState(loadJson(KEY_FRUIT));
+            fv.setScoreListener(s -> tvScore.setText("得分 " + s));
+            fv.setLivesListener(l -> tvLives.setText("❤ " + l));
+            tvLives.setVisibility(View.VISIBLE);
+            tvLives.setText("❤ " + fv.getLives());
+            gameArea.addView(fv, new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            activeGameView = fv;
+        }
+
+        tvTime.setText("剩余 " + timeLeft + " 秒");
+        tvScore.setText("得分 " + getActiveScore());
+        startActiveGame();
         startTimer();
+    }
+
+    private void buildSnakeControls(final SnakeView sv) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER);
+        row.addView(dirBtn("←", () -> sv.setDirection(SnakeView.DIR_LEFT)));
+        row.addView(dirBtn("↑", () -> sv.setDirection(SnakeView.DIR_UP)));
+        row.addView(dirBtn("↓", () -> sv.setDirection(SnakeView.DIR_DOWN)));
+        row.addView(dirBtn("→", () -> sv.setDirection(SnakeView.DIR_RIGHT)));
+        controlPad.addView(row);
+    }
+
+    private void buildTetrisControls(final TetrisView tv) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER);
+        row.addView(dirBtn("←", tv::moveLeft));
+        row.addView(dirBtn("↓", tv::softDrop));
+        row.addView(dirBtn("→", tv::moveRight));
+        row.addView(dirBtn("⟳", tv::rotate));
+        controlPad.addView(row);
+    }
+
+    private Button dirBtn(String t, final Runnable a) {
+        Button b = button(t, Color.parseColor("#37474F"), Color.WHITE);
+        b.setTextSize(TypedValue.COMPLEX_UNIT_SP, 26);
+        b.setOnClickListener(v -> a.run());
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(64), dp(56));
+        lp.setMargins(dp(8), dp(0), dp(8), dp(0));
+        b.setLayoutParams(lp);
+        return b;
     }
 
     private void startTimer() {
@@ -470,23 +638,188 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         public void run() {
             if (!inGame) return;
             timeLeft--;
-            if (timeLeft <= 0) {
-                tvTime.setText("时间到");
-                exitGame();
-                return;
-            }
+            if (timeLeft <= 0) { tvTime.setText("时间到"); onGameEnded(); return; }
             tvTime.setText("剩余 " + timeLeft + " 秒");
             handler.postDelayed(timerTick, 1000);
         }
     };
 
-    private void exitGame() {
+    private void onGameEnded() {
         inGame = false;
         handler.removeCallbacks(timerTick);
-        snakeView.stopGame();
-        gamePanel.setVisibility(View.GONE);
-        quizScroll.setVisibility(View.VISIBLE);
-        startNewRound();
+        saveActiveGame();
+        if (activeGameView != null) stopActiveGame();
+        gameHost.setVisibility(View.GONE);
+        if (reviewDue) { reviewDue = false; startReview(); }
+        else startNewRound();
+    }
+
+    private void saveActiveGame() {
+        if (activeGameView == null) return;
+        SharedPreferences.Editor ed = getSharedPreferences(PREFS, MODE_PRIVATE).edit();
+        if (activeGame == GAME_SNAKE) ed.putString(KEY_SNAKE, ((SnakeView) activeGameView).saveState().toString());
+        else if (activeGame == GAME_TETRIS) ed.putString(KEY_TETRIS, ((TetrisView) activeGameView).saveState().toString());
+        else if (activeGame == GAME_FRUIT) ed.putString(KEY_FRUIT, ((FruitNinjaView) activeGameView).saveState().toString());
+        ed.apply();
+    }
+
+    private JSONObject loadJson(String key) {
+        try {
+            String s = getSharedPreferences(PREFS, MODE_PRIVATE).getString(key, null);
+            return s == null ? null : new JSONObject(s);
+        } catch (Exception e) { return null; }
+    }
+
+    private int getActiveScore() {
+        if (activeGameView instanceof SnakeView) return ((SnakeView) activeGameView).getScore();
+        if (activeGameView instanceof TetrisView) return ((TetrisView) activeGameView).getScore();
+        if (activeGameView instanceof FruitNinjaView) return ((FruitNinjaView) activeGameView).getScore();
+        return 0;
+    }
+
+    private void startActiveGame() {
+        if (activeGameView instanceof SnakeView) ((SnakeView) activeGameView).startGame();
+        else if (activeGameView instanceof TetrisView) ((TetrisView) activeGameView).startGame();
+        else if (activeGameView instanceof FruitNinjaView) ((FruitNinjaView) activeGameView).startGame();
+    }
+
+    private void stopActiveGame() {
+        if (activeGameView instanceof SnakeView) ((SnakeView) activeGameView).stopGame();
+        else if (activeGameView instanceof TetrisView) ((TetrisView) activeGameView).stopGame();
+        else if (activeGameView instanceof FruitNinjaView) ((FruitNinjaView) activeGameView).stopGame();
+    }
+
+    // ===================== 复习模块（艾宾浩斯） =====================
+    private void startReview() {
+        reviewQs = buildReviewQuestions();
+        reviewIndex = 0;
+        reviewScroll.setVisibility(View.VISIBLE);
+        quizScroll.setVisibility(View.GONE);
+        showReviewQuestion();
+    }
+
+    private List<ReviewQ> buildReviewQuestions() {
+        List<ReviewQ> qs = new ArrayList<>();
+        // 新学 10 字
+        List<Word> newPool = new ArrayList<>(lastRoundWords);
+        Collections.shuffle(newPool, rng);
+        // 旧字池（排除本轮新字），按艾宾浩斯权重采样
+        List<Word> oldPool = new ArrayList<>();
+        List<Double> weights = new ArrayList<>();
+        long now = System.currentTimeMillis();
+        Set<String> newSet = new HashSet<>();
+        for (Word w : lastRoundWords) newSet.add(w.hanzi);
+        for (Map.Entry<String, long[]> e : learned.entrySet()) {
+            if (newSet.contains(e.getKey())) continue;
+            Word w = wordByHanzi.get(e.getKey());
+            if (w == null) continue;
+            long[] v = e.getValue();
+            double gap = (now - v[1]) / 60000.0 + 1;   // 距上次学习越久权重越高
+            double weight = gap / Math.max(1, v[0]);   // 学习次数越少权重越高
+            oldPool.add(w); weights.add(weight);
+        }
+        // 5 新 + 5 旧（旧不足则补新）
+        List<Word> chosen = new ArrayList<>();
+        chosen.addAll(takeRandom(newPool, 5));
+        chosen.addAll(weightedSample(oldPool, weights, 5));
+        while (chosen.size() < REVIEW_SIZE) {
+            chosen.add(newPool.get(rng.nextInt(newPool.size())));
+        }
+        Collections.shuffle(chosen, rng);
+
+        for (Word w : chosen) {
+            ReviewQ q = new ReviewQ();
+            q.w = w;
+            q.correct = 0;
+            long[] v = learned.get(w.hanzi);
+            q.learnedCount = v == null ? 0 : (int) v[0];
+            String correct = tonedPinyin(w.py, w.tone);
+            q.opts = new ArrayList<>();
+            q.opts.add(correct);
+            List<String> distract = new ArrayList<>(tonedSet);
+            distract.remove(correct);
+            Collections.shuffle(distract, rng);
+            int added = 0;
+            for (String d : distract) { if (added >= 3) break; if (!q.opts.contains(d)) { q.opts.add(d); added++; } }
+            Collections.shuffle(q.opts, rng);
+            q.correct = q.opts.indexOf(correct);
+            qs.add(q);
+        }
+        return qs;
+    }
+
+    private List<Word> takeRandom(List<Word> pool, int k) {
+        List<Word> copy = new ArrayList<>(pool);
+        Collections.shuffle(copy, rng);
+        List<Word> out = new ArrayList<>();
+        for (int i = 0; i < Math.min(k, copy.size()); i++) out.add(copy.get(i));
+        return out;
+    }
+
+    private List<Word> weightedSample(List<Word> pool, List<Double> weights, int k) {
+        List<Word> out = new ArrayList<>();
+        List<Word> p = new ArrayList<>(pool);
+        List<Double> w = new ArrayList<>(weights);
+        for (int n = 0; n < k && !p.isEmpty(); n++) {
+            double total = 0;
+            for (double x : w) total += x;
+            double r = rng.nextDouble() * total;
+            double acc = 0; int idx = 0;
+            for (int i = 0; i < p.size(); i++) {
+                acc += w.get(i);
+                if (r <= acc) { idx = i; break; }
+            }
+            out.add(p.remove(idx));
+            w.remove(idx);
+        }
+        return out;
+    }
+
+    private void showReviewQuestion() {
+        ReviewQ q = reviewQs.get(reviewIndex);
+        tvReviewProgress.setText("复习 " + (reviewIndex + 1) + " / " + REVIEW_SIZE);
+        tvReviewHint.setText("这个字你已学习 " + q.learnedCount + " 次，选出它的正确拼音：");
+        tvReviewChar.setText(q.w.hanzi);
+        tvReviewFeedback.setText("");
+        btnReviewNext.setEnabled(false);
+        reviewOpts.removeAllViews();
+        for (int i = 0; i < q.opts.size(); i++) {
+            final int fi = i;
+            Button b = button(q.opts.get(i), Color.WHITE, Color.parseColor("#37474F"));
+            b.setTextSize(TypedValue.COMPLEX_UNIT_SP, 28);
+            b.setOnClickListener(v -> answerReview(q, fi, b));
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(56));
+            lp.setMargins(dp(0), dp(6), dp(0), dp(6));
+            b.setLayoutParams(lp);
+            reviewOpts.addView(b);
+        }
+    }
+
+    private void answerReview(ReviewQ q, int choice, Button b) {
+        for (int i = 0; i < reviewOpts.getChildCount(); i++) reviewOpts.getChildAt(i).setEnabled(false);
+        if (choice == q.correct) {
+            tvReviewFeedback.setTextColor(Color.parseColor("#2E7D32"));
+            tvReviewFeedback.setText("答对啦！" + q.w.hanzi + " 读 " + tonedPinyin(q.w.py, q.w.tone));
+            b.setBackgroundColor(Color.parseColor("#C8E6C9"));
+            speakBlend(q.w);
+        } else {
+            tvReviewFeedback.setTextColor(Color.parseColor("#C62828"));
+            tvReviewFeedback.setText("正确答案：" + tonedPinyin(q.w.py, q.w.tone));
+            b.setBackgroundColor(Color.parseColor("#FFCDD2"));
+            if (reviewOpts.getChildAt(q.correct) instanceof Button)
+                ((Button) reviewOpts.getChildAt(q.correct)).setBackgroundColor(Color.parseColor("#C8E6C9"));
+        }
+        btnReviewNext.setEnabled(true);
+    }
+
+    private void nextReview() {
+        reviewIndex++;
+        if (reviewIndex >= reviewQs.size()) {
+            reviewScroll.setVisibility(View.GONE);
+            startNewRound();
+        } else {
+            showReviewQuestion();
+        }
     }
 
     // ===================== 语音朗读 =====================
@@ -498,10 +831,19 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         }
     }
 
-    private void speakCurrent() {
+    /** 点击拼音字母：朗读该字母（零声母朗读整个音节） */
+    private void speakLetter(String s, Word w) {
         if (!ttsReady || tts == null) return;
-        Word w = roundWords.get(currentIndex);
-        tts.speak(w.hanzi, TextToSpeech.QUEUE_FLUSH, null, null);
+        if (s == null || s.isEmpty()) tts.speak(w.py, TextToSpeech.QUEUE_FLUSH, null, null);
+        else tts.speak(s, TextToSpeech.QUEUE_FLUSH, null, null);
+    }
+
+    /** 整段拼读：声母 + 带调韵母 + 汉字 */
+    private void speakBlend(Word w) {
+        if (!ttsReady || tts == null || w == null) return;
+        if (!w.sm.isEmpty()) tts.speak(w.sm, TextToSpeech.QUEUE_FLUSH, null, null);
+        tts.speak(tonedPinyin(w.ym, w.tone), TextToSpeech.QUEUE_ADD, null, null);
+        tts.speak(w.hanzi, TextToSpeech.QUEUE_ADD, null, null);
     }
 
     // ===================== 小工具 =====================
@@ -526,7 +868,8 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         }
     }
 
-    /** 将拼音音节 + 声调转为带声调符号的拼音，如 ("ma",1)->"mā" */
+    /** 将拼音音节 + 声调转为带声调符号的拼音，如 ("ma",1)->"mā"；
+     *  同样可用于韵母（如 ("ia",4)->"ià"），实现声调跟随韵母发声。 */
     private String tonedPinyin(String py, int tone) {
         if (tone < 1 || tone > 4) return py;
         String[][] marks = {
@@ -543,10 +886,10 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         else if (py.contains("e")) idx = py.indexOf("e");
         else {
             int iu = py.indexOf("iu");
-            if (iu >= 0) idx = iu + 1;          // iu -> 标 u
+            if (iu >= 0) idx = iu + 1;
             else {
                 int ui = py.indexOf("ui");
-                if (ui >= 0) idx = ui + 1;       // ui -> 标 i
+                if (ui >= 0) idx = ui + 1;
                 else {
                     int last = -1;
                     for (int k = 0; k < py.length(); k++) {
@@ -595,19 +938,13 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     @Override
     protected void onPause() {
         super.onPause();
-        if (inGame) {
-            snakeView.stopGame();
-            handler.removeCallbacks(timerTick);
-        }
+        if (inGame) { saveActiveGame(); stopActiveGame(); handler.removeCallbacks(timerTick); }
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        if (inGame) {
-            snakeView.startGame();
-            startTimer();
-        }
+        if (inGame) { startActiveGame(); startTimer(); }
     }
 
     @Override
@@ -615,6 +952,5 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         super.onDestroy();
         handler.removeCallbacksAndMessages(null);
         if (tts != null) tts.shutdown();
-        if (snakeView != null) snakeView.stopGame();
     }
 }
