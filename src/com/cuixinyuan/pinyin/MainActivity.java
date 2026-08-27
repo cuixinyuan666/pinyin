@@ -71,31 +71,19 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     private static final String[] TONE_MARK = {"ā", "á", "ǎ", "à"};
     private static final String[] TONE_NAME = {"一声", "二声", "三声", "四声"};
 
-    // 声母标准读法（小学语文《汉语拼音方案》）：点击声母读作对应拼音音节，绝不读英文字母
+    // 声母标准呼读音（小学语文《汉语拼音方案》）：一律使用带调拼音音节，
+    // 中文 TTS 才能按汉字发音朗读，绝不使用无调拼音/英文字母。
+    // 例：b→bō(玻) p→pō(坡) m→mō(摸) f→fō(佛) d→dē(得) t→tē(特) x→xī(希)
     private static final Map<String, String> INITIAL_READ = new HashMap<>();
-    // 韵母标准读法（单独成音节时的读法）
-    private static final Map<String, String> FINAL_READ = new HashMap<>();
     static {
-        INITIAL_READ.put("b", "bo"); INITIAL_READ.put("p", "po"); INITIAL_READ.put("m", "mo");
-        INITIAL_READ.put("f", "fo"); INITIAL_READ.put("d", "de"); INITIAL_READ.put("t", "te");
-        INITIAL_READ.put("n", "ne"); INITIAL_READ.put("l", "le"); INITIAL_READ.put("g", "ge");
-        INITIAL_READ.put("k", "ke"); INITIAL_READ.put("h", "he"); INITIAL_READ.put("j", "ji");
-        INITIAL_READ.put("q", "qi"); INITIAL_READ.put("x", "xi"); INITIAL_READ.put("zh", "zhi");
-        INITIAL_READ.put("ch", "chi"); INITIAL_READ.put("sh", "shi"); INITIAL_READ.put("r", "ri");
-        INITIAL_READ.put("z", "zi"); INITIAL_READ.put("c", "ci"); INITIAL_READ.put("s", "si");
-        INITIAL_READ.put("y", "yi"); INITIAL_READ.put("w", "wu");
-
-        FINAL_READ.put("a", "a"); FINAL_READ.put("o", "o"); FINAL_READ.put("e", "e");
-        FINAL_READ.put("i", "yi"); FINAL_READ.put("u", "wu"); FINAL_READ.put("er", "er");
-        FINAL_READ.put("ai", "ai"); FINAL_READ.put("ei", "ei"); FINAL_READ.put("ui", "wei");
-        FINAL_READ.put("ao", "ao"); FINAL_READ.put("ou", "ou"); FINAL_READ.put("iu", "you");
-        FINAL_READ.put("ie", "ye"); FINAL_READ.put("ue", "yue"); FINAL_READ.put("an", "an");
-        FINAL_READ.put("en", "en"); FINAL_READ.put("in", "yin"); FINAL_READ.put("un", "wen");
-        FINAL_READ.put("ang", "ang"); FINAL_READ.put("eng", "eng"); FINAL_READ.put("ing", "ying");
-        FINAL_READ.put("ong", "weng"); FINAL_READ.put("ia", "ya"); FINAL_READ.put("ua", "wa");
-        FINAL_READ.put("uo", "wo"); FINAL_READ.put("uai", "wai"); FINAL_READ.put("iao", "yao");
-        FINAL_READ.put("ian", "yan"); FINAL_READ.put("uan", "wan"); FINAL_READ.put("uang", "wang");
-        FINAL_READ.put("iong", "yong"); FINAL_READ.put("un2", "yun"); FINAL_READ.put("uan2", "yuan");
+        INITIAL_READ.put("b", "bō"); INITIAL_READ.put("p", "pō"); INITIAL_READ.put("m", "mō");
+        INITIAL_READ.put("f", "fō"); INITIAL_READ.put("d", "dē"); INITIAL_READ.put("t", "tē");
+        INITIAL_READ.put("n", "nē"); INITIAL_READ.put("l", "lē"); INITIAL_READ.put("g", "gē");
+        INITIAL_READ.put("k", "kē"); INITIAL_READ.put("h", "hē"); INITIAL_READ.put("j", "jī");
+        INITIAL_READ.put("q", "qī"); INITIAL_READ.put("x", "xī"); INITIAL_READ.put("zh", "zhī");
+        INITIAL_READ.put("ch", "chī"); INITIAL_READ.put("sh", "shī"); INITIAL_READ.put("r", "rī");
+        INITIAL_READ.put("z", "zī"); INITIAL_READ.put("c", "cī"); INITIAL_READ.put("s", "sī");
+        INITIAL_READ.put("y", "yī"); INITIAL_READ.put("w", "wū");
     }
 
     // ====== 数据 ======
@@ -589,7 +577,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
                 else speakInitial(s);                    // 声母按标准拼音读法
                 selectedSm = s; highlight(smRow, s); evaluate();
             });
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(64), dp(44));
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(64), dp(50));
             lp.setMargins(dp(6), dp(4), dp(6), dp(4));
             b.setLayoutParams(lp);
             smRow.addView(b);
@@ -613,7 +601,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
                 speakFinal(s);                           // 韵母按标准拼音读法
                 selectedYm = s; highlight(ymRow, s); evaluate();
             });
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(72), dp(40));
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(72), dp(48));
             lp.setMargins(dp(6), dp(4), dp(6), dp(4));
             b.setLayoutParams(lp);
             ymRow.addView(b);
@@ -632,7 +620,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
                 speakSyllable(tonedPinyin(currentWord().py, t));
                 selectedTone = t; highlight(toneRow, t); evaluate();
             });
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(64), dp(48));
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(64), dp(52));
             lp.setMargins(dp(4), dp(4), dp(4), dp(4));
             b.setLayoutParams(lp);
             toneRow.addView(b);
@@ -971,34 +959,34 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         }
     }
 
-    /** 朗读声母：按《汉语拼音方案》标准读法（如 t→特），绝不读英文字母 */
+    /** 朗读声母：按《汉语拼音方案》标准呼读音（如 t→tē 特），绝不读英文字母 */
     private void speakInitial(String s) {
         if (!ttsReady || tts == null || s == null || s.isEmpty()) return;
         String read = INITIAL_READ.get(s);
         if (read != null && !read.isEmpty()) tts.speak(read, TextToSpeech.QUEUE_FLUSH, null, null);
     }
 
-    /** 朗读韵母：按标准读法（如 ao→奥），绝不读英文字母 */
+    /** 朗读韵母：按当前汉字所属韵母的实际声调带调朗读（如「少」选 ao → ǎo），绝不读无调/英文字母 */
     private void speakFinal(String s) {
         if (!ttsReady || tts == null || s == null || s.isEmpty()) return;
-        String read = FINAL_READ.get(s);
-        if (read != null && !read.isEmpty()) tts.speak(read, TextToSpeech.QUEUE_FLUSH, null, null);
+        tts.speak(tonedPinyin(s, currentWord().tone), TextToSpeech.QUEUE_FLUSH, null, null);
     }
 
-    /** 朗读一个完整拼音音节（带调或不带调） */
+    /** 朗读一个完整拼音音节（带调） */
     private void speakSyllable(String s) {
         if (!ttsReady || tts == null || s == null || s.isEmpty()) return;
         tts.speak(s, TextToSpeech.QUEUE_FLUSH, null, null);
     }
 
-    /** 整段拼读：声母音 + 韵母音 + 汉字（零声母则直接拼读音节 + 汉字） */
+    /** 整段拼读：声母呼读音 + 带本字声调的韵母 + 汉字（如 少 → shī + ǎo + 少；零声母 → 带调整音节 + 汉字） */
     private void speakBlend(Word w) {
         if (!ttsReady || tts == null || w == null) return;
         if (w.sm.isEmpty()) {
             tts.speak(tonedPinyin(w.py, w.tone), TextToSpeech.QUEUE_FLUSH, null, null);
         } else {
-            tts.speak(INITIAL_READ.get(w.sm), TextToSpeech.QUEUE_FLUSH, null, null);
-            tts.speak(FINAL_READ.get(w.ym), TextToSpeech.QUEUE_ADD, null, null);
+            String sm = INITIAL_READ.get(w.sm);
+            if (sm != null && !sm.isEmpty()) tts.speak(sm, TextToSpeech.QUEUE_FLUSH, null, null);
+            tts.speak(tonedPinyin(w.ym, w.tone), TextToSpeech.QUEUE_ADD, null, null);
         }
         tts.speak(w.hanzi, TextToSpeech.QUEUE_ADD, null, null);
     }
@@ -1082,7 +1070,10 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         b.setTextColor(fg);
         b.setBackgroundColor(bg);
         b.setAllCaps(false);
-        b.setPadding(dp(10), dp(8), dp(10), dp(8));
+        // 移除系统 Button 默认 minHeight(48dp) 与过大内边距，避免文字被上下裁切、显示残缺
+        b.setMinHeight(0);
+        b.setMinimumHeight(0);
+        b.setPadding(dp(8), dp(2), dp(8), dp(2));
         return b;
     }
 
