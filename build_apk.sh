@@ -3,14 +3,21 @@ set -e
 
 # 本脚本使用 Android SDK 自带命令行工具离线构建 APK，
 # 不依赖 Gradle / Maven / Android Studio。
-# 运行环境：Windows + Git Bash + JDK 17+ + Android SDK
 
-ROOT="$(cd "$(dirname "$0")" && pwd -W)"
-SDK="${ANDROID_SDK:-D:/SOFTWARE/android_sdk}"
+ROOT="$(cd "$(dirname "$0")" && pwd)"
+SDK="${ANDROID_SDK:-/opt/android-sdk}"
 BT="${SDK}/build-tools/35.0.0"
 AJ="${SDK}/platforms/android-34/android.jar"
 OUT="${ROOT}/build"
 OBJ="${OUT}/obj"
+
+# Windows Git Bash 下 aapt2 带 .exe 后缀；Linux 无后缀
+AAPT2="${BT}/aapt2"
+ZIPALIGN="${BT}/zipalign"
+if [ -f "${BT}/aapt2.exe" ]; then
+  AAPT2="${BT}/aapt2.exe"
+  ZIPALIGN="${BT}/zipalign.exe"
+fi
 
 echo "ROOT=${ROOT}"
 echo "SDK=${SDK}"
@@ -30,11 +37,11 @@ java -cp "$BT/lib/d8.jar" com.android.tools.r8.D8 --min-api 21 --lib "$AJ" --out
 echo "    dex: $(ls -l "$DEXDIR/classes.dex" | awk '{print $5}') bytes"
 
 echo "==> 3. aapt2 compile resources"
-"$BT/aapt2.exe" compile -o "$OUT/res.flata" --dir "$ROOT/res"
+"$AAPT2" compile -o "$OUT/res.flata" --dir "$ROOT/res"
 echo "    res compiled"
 
 echo "==> 4. aapt2 link (manifest + res + assets)"
-"$BT/aapt2.exe" link -I "$AJ" \
+"$AAPT2" link -I "$AJ" \
   -o "$OUT/app-unsigned.apk" \
   --manifest "$ROOT/AndroidManifest.xml" \
   -A "$ROOT/assets" \
@@ -55,7 +62,7 @@ fi
 
 echo "==> 7. zipalign"
 rm -f "$OUT/app-aligned.apk"
-"$BT/zipalign.exe" -p 4 "$OUT/app-unsigned.apk" "$OUT/app-aligned.apk"
+"$ZIPALIGN" -p 4 "$OUT/app-unsigned.apk" "$OUT/app-aligned.apk"
 
 echo "==> 8. apksigner"
 rm -f "$ROOT/pinyin-app.apk"
