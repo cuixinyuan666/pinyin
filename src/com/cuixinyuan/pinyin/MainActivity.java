@@ -3,6 +3,7 @@ package com.cuixinyuan.pinyin;
 import android.app.Activity;
 import android.content.SharedPreferences;
 import android.graphics.Color;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -364,8 +365,10 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         quizPanel.addView(textView("请选择它的「韵母」", 16, Color.parseColor("#5D4037"), false));
         ymRow = new LinearLayout(this);
         ymRow.setOrientation(LinearLayout.HORIZONTAL); ymRow.setGravity(Gravity.CENTER);
-        ymRow.setPadding(dp(0), dp(4), dp(0), dp(4));
-        quizPanel.addView(ymRow);
+        ymRow.setPadding(dp(4), dp(4), dp(4), dp(4));
+        // 韵母按钮用权重平分整行宽度 + 文字自动缩放，长韵母(uang/iao/uan)也能完整显示
+        quizPanel.addView(ymRow, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         quizPanel.addView(textView("请选择它的「声调」", 16, Color.parseColor("#5D4037"), false));
         toneRow = new LinearLayout(this);
@@ -627,15 +630,15 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         for (final String s : opts) {
             String label = s.isEmpty() ? "∅（无）" : s;
             Button b = button(label, Color.WHITE, Color.parseColor("#37474F"));
-            b.setTextSize(TypedValue.COMPLEX_UNIT_SP, 32);
+            autoSizeButton(b, 30, 26);
             b.setTag(s);
             b.setOnClickListener(v -> {
                 if (s.isEmpty()) speakHanzi(w.hanzi, TextToSpeech.QUEUE_FLUSH); // 零声母：读本字
                 else speakInitial(s);                                          // 声母读呼读音汉字
                 selectedSm = s; highlight(smRow, s); evaluate();
             });
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(64), dp(50));
-            lp.setMargins(dp(6), dp(4), dp(6), dp(4));
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(70), dp(50));
+            lp.setMargins(dp(5), dp(4), dp(5), dp(4));
             b.setLayoutParams(lp);
             smRow.addView(b);
         }
@@ -652,14 +655,14 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         Collections.shuffle(opts, rng);
         for (final String s : opts) {
             Button b = button(s, Color.WHITE, Color.parseColor("#37474F"));
-            b.setTextSize(TypedValue.COMPLEX_UNIT_SP, 28);
+            autoSizeButton(b, 26, 20);                    // 自动缩放，长韵母(uang/iao/uan)也完整显示
             b.setTag(s);
             b.setOnClickListener(v -> {
                 speakFinal(s);                           // 韵母按标准拼音读法
                 selectedYm = s; highlight(ymRow, s); evaluate();
             });
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(72), dp(48));
-            lp.setMargins(dp(6), dp(4), dp(6), dp(4));
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(50), 1f);
+            lp.setMargins(dp(5), dp(4), dp(5), dp(4));
             b.setLayoutParams(lp);
             ymRow.addView(b);
         }
@@ -832,8 +835,11 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         handler.removeCallbacks(timerTick);
         saveActiveGame();
         if (activeGameView != null) stopActiveGame();
+        // 游戏结束 / 点「先不玩」→ 回到下一轮 10 题练习。
+        // 必须隐藏游戏选择遮罩，否则它盖在答题界面之上导致「先不玩」看似无法跳转。
+        selectOverlay.setVisibility(View.GONE);
         gameHost.setVisibility(View.GONE);
-        // 游戏结束 → 回到下一轮 10 题练习
+        reviewScroll.setVisibility(View.GONE);
         quizScroll.setVisibility(View.VISIBLE);
         startNewRound();
     }
@@ -1164,6 +1170,17 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     private int dp(int v) {
         return (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v,
                 getResources().getDisplayMetrics());
+    }
+
+    /** 让按钮文字在固定宽度内自动缩放，避免较长的韵母（如 uang / iao / uan）被裁切、只显示局部。
+     *  API 26+ 使用系统自动缩放；低版本回退为较小的固定字号（同样保证整段韵母能完整显示）。 */
+    private void autoSizeButton(Button b, int maxSp, int fallbackSp) {
+        b.setSingleLine(true);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            b.setAutoSizeTextTypeUniformWithConfiguration(11, maxSp, 1, TypedValue.COMPLEX_UNIT_SP);
+        } else {
+            b.setTextSize(TypedValue.COMPLEX_UNIT_SP, fallbackSp);
+        }
     }
 
     // ===================== 生命周期 =====================
