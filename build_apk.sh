@@ -33,6 +33,8 @@ rm -rf "$OBJ"; mkdir -p "$OBJ"
 javac -encoding UTF-8 -source 17 -target 17 -cp "$AJ" -d "$OBJ" \
   "$ROOT/src/com/cuixinyuan/pinyin/MainActivity.java" \
   "$ROOT/src/com/cuixinyuan/pinyin/PinyinBridge.java" \
+  "$ROOT/src/com/cuixinyuan/pinyin/WordStatsManager.java" \
+  "$ROOT/src/com/cuixinyuan/pinyin/TankView.java" \
   "$ROOT/src/com/cuixinyuan/pinyin/SnakeView.java" \
   "$ROOT/src/com/cuixinyuan/pinyin/TetrisView.java" \
   "$ROOT/src/com/cuixinyuan/pinyin/FruitNinjaView.java"
