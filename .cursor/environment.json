@@ -1,0 +1,5 @@
+{
+  "name": "拼音识字乐园 (Android APK 离线构建)",
+  "user": "ubuntu",
+  "install": "bash .cursor/install.sh"
+}
