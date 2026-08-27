@@ -4,7 +4,7 @@ import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
-import android.graphics.RectF;
+import android.graphics.Path;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.View;
@@ -29,6 +29,7 @@ public class TankView extends View {
     private static final int ENEMIES_PER_LEVEL = 12;
     private static final long TICK_MS = 40;
     private static final long MOVE_INTERVAL = 120;
+    private static final long ENEMY_MOVE_INTERVAL = 260;
     private static final long SHOT_COOLDOWN = 400;
     private static final long ENEMY_SHOT_MIN = 900;
 
@@ -40,6 +41,8 @@ public class TankView extends View {
     private final Paint playerPaint = new Paint();
     private final Paint enemyPaint = new Paint();
     private final Paint bulletPaint = new Paint();
+    private final Paint trackPaint = new Paint();
+    private final Paint gridPaint = new Paint();
     private final Paint textPaint = new Paint();
     private final Random rnd = new Random();
     private final Handler handler = new Handler(Looper.getMainLooper());
@@ -63,7 +66,7 @@ public class TankView extends View {
 
     public TankView(Context context) {
         super(context);
-        bgPaint.setColor(Color.BLACK);
+        bgPaint.setColor(Color.parseColor("#212121"));
         brickPaint.setColor(Color.parseColor("#D84315"));
         steelPaint.setColor(Color.parseColor("#B0BEC5"));
         waterPaint.setColor(Color.parseColor("#1565C0"));
@@ -71,6 +74,10 @@ public class TankView extends View {
         playerPaint.setColor(Color.parseColor("#FDD835"));
         enemyPaint.setColor(Color.parseColor("#E53935"));
         bulletPaint.setColor(Color.WHITE);
+        trackPaint.setColor(Color.parseColor("#5D4037"));
+        trackPaint.setStyle(Paint.Style.FILL);
+        gridPaint.setColor(Color.parseColor("#1A1A1A"));
+        gridPaint.setStrokeWidth(1f);
         textPaint.setColor(Color.WHITE);
         textPaint.setTextSize(28);
         textPaint.setAntiAlias(true);
@@ -188,8 +195,8 @@ public class TankView extends View {
         }
 
         for (EnemyTank e : enemies) {
-            if (now - e.lastMove > MOVE_INTERVAL + 40) {
-                if (rnd.nextFloat() < 0.25f) e.dir = rnd.nextInt(4);
+            if (now - e.lastMove > ENEMY_MOVE_INTERVAL) {
+                if (rnd.nextFloat() < 0.22f) e.dir = rnd.nextInt(4);
                 if (!tryMoveEnemy(e, e.dir)) e.dir = rnd.nextInt(4);
                 e.lastMove = now;
             }
@@ -202,25 +209,24 @@ public class TankView extends View {
         Iterator<Bullet> bi = bullets.iterator();
         while (bi.hasNext()) {
             Bullet b = bi.next();
-            b.step();
-            int bc = (int) b.x, br = (int) b.y;
-            if (bc < 0 || bc >= COLS || br < 0 || br >= ROWS) { bi.remove(); continue; }
-
-            int tile = map[br][bc];
-            if (tile == T_BRICK) {
-                map[br][bc] = T_EMPTY;
+            int hit = b.advanceAndHit(map, COLS, ROWS);
+            if (hit == Bullet.HIT_BORDER) { bi.remove(); continue; }
+            if (hit == T_BRICK) {
+                int c = b.hitCol, r = b.hitRow;
+                if (c >= 0 && r >= 0) map[r][c] = T_EMPTY;
                 bi.remove();
                 continue;
             }
-            if (tile == T_STEEL || tile == T_WATER) { bi.remove(); continue; }
-            if (tile == T_BASE) {
-                map[br][bc] = T_EMPTY;
+            if (hit == T_STEEL || hit == T_WATER) { bi.remove(); continue; }
+            if (hit == T_BASE) {
+                if (b.hitCol >= 0 && b.hitRow >= 0) map[b.hitRow][b.hitCol] = T_EMPTY;
                 baseAlive = false;
                 running = false;
                 bi.remove();
                 continue;
             }
 
+            int bc = b.cellCol(), br = b.cellRow();
             if (b.fromPlayer) {
                 Iterator<EnemyTank> ei = enemies.iterator();
                 while (ei.hasNext()) {
@@ -316,22 +322,29 @@ public class TankView extends View {
         for (int r = 0; r < ROWS; r++) {
             for (int c = 0; c < COLS; c++) {
                 float x = ox + c * cell, y = oy + r * cell;
+                canvas.drawRect(x, y, x + cell, y + cell, bgPaint);
+                canvas.drawRect(x, y, x + cell, y + cell, gridPaint);
                 int t = map[r][c];
-                if (t == T_BRICK) canvas.drawRect(x, y, x + cell, y + cell, brickPaint);
-                else if (t == T_STEEL) canvas.drawRect(x, y, x + cell, y + cell, steelPaint);
-                else if (t == T_WATER) canvas.drawRect(x, y, x + cell, y + cell, waterPaint);
-                else if (t == T_BASE) {
-                    canvas.drawRect(x, y, x + cell, y + cell, basePaint);
-                    canvas.drawRect(x + cell * 0.2f, y + cell * 0.2f,
-                            x + cell * 0.8f, y + cell * 0.8f, enemyPaint);
+                if (t == T_BRICK) {
+                    canvas.drawRect(x + 1, y + 1, x + cell - 1, y + cell - 1, brickPaint);
+                    canvas.drawLine(x + cell * 0.5f, y + 2, x + cell * 0.5f, y + cell - 2, gridPaint);
+                    canvas.drawLine(x + 2, y + cell * 0.5f, x + cell - 2, y + cell * 0.5f, gridPaint);
+                } else if (t == T_STEEL) {
+                    canvas.drawRect(x + 1, y + 1, x + cell - 1, y + cell - 1, steelPaint);
+                } else if (t == T_WATER) {
+                    canvas.drawRect(x + 1, y + 1, x + cell - 1, y + cell - 1, waterPaint);
+                } else if (t == T_BASE) {
+                    canvas.drawRect(x + 1, y + 1, x + cell - 1, y + cell - 1, basePaint);
+                    canvas.drawRect(x + cell * 0.25f, y + cell * 0.25f,
+                            x + cell * 0.75f, y + cell * 0.75f, enemyPaint);
                 }
             }
         }
 
         for (EnemyTank e : enemies)
-            drawTank(canvas, ox + e.x * cell, oy + e.y * cell, cell, e.dir, enemyPaint);
+            drawTank(canvas, ox + e.x * cell, oy + e.y * cell, cell, e.dir, enemyPaint, trackPaint);
         if (playerAlive)
-            drawTank(canvas, ox + px * cell, oy + py * cell, cell, pDir, playerPaint);
+            drawTank(canvas, ox + px * cell, oy + py * cell, cell, pDir, playerPaint, trackPaint);
         for (Bullet b : bullets)
             canvas.drawCircle(ox + b.x * cell, oy + b.y * cell, cell * 0.12f, bulletPaint);
 
@@ -343,20 +356,31 @@ public class TankView extends View {
             canvas.drawText("游戏结束", getWidth() / 2f - 50, getHeight() / 2f, textPaint);
     }
 
-    private void drawTank(Canvas c, float x, float y, float size, int dir, Paint body) {
-        float pad = size * 0.08f;
-        c.drawRoundRect(new RectF(x + pad, y + pad, x + size - pad, y + size - pad), 4, 4, body);
-        float cx = x + size / 2f, cy = y + size / 2f, len = size * 0.38f;
-        float ex = cx, ey = cy;
+    private void drawTank(Canvas c, float x, float y, float size, int dir, Paint body, Paint track) {
+        float cx = x + size * 0.5f, cy = y + size * 0.5f;
+        float hw = size * 0.22f, hh = size * 0.34f;
+        Path hull = new Path();
+        if (dir == DIR_UP || dir == DIR_DOWN) {
+            c.drawRoundRect(x + size * 0.12f, y + size * 0.18f, x + size * 0.28f, y + size * 0.82f, 3, 3, track);
+            c.drawRoundRect(x + size * 0.72f, y + size * 0.18f, x + size * 0.88f, y + size * 0.82f, 3, 3, track);
+            hull.addRoundRect(x + size * 0.26f, y + size * 0.22f, x + size * 0.74f, y + size * 0.78f, 4, 4, Path.Direction.CW);
+        } else {
+            c.drawRoundRect(x + size * 0.18f, y + size * 0.12f, x + size * 0.82f, y + size * 0.28f, 3, 3, track);
+            c.drawRoundRect(x + size * 0.18f, y + size * 0.72f, x + size * 0.82f, y + size * 0.88f, 3, 3, track);
+            hull.addRoundRect(x + size * 0.22f, y + size * 0.26f, x + size * 0.78f, y + size * 0.74f, 4, 4, Path.Direction.CW);
+        }
+        c.drawPath(hull, body);
+        c.drawCircle(cx, cy, size * 0.14f, body);
+        float len = size * 0.36f, ex = cx, ey = cy;
         if (dir == DIR_UP) ey -= len;
         else if (dir == DIR_DOWN) ey += len;
         else if (dir == DIR_LEFT) ex -= len;
         else ex += len;
         Paint barrel = new Paint(body);
-        barrel.setStrokeWidth(size * 0.14f);
+        barrel.setStrokeWidth(size * 0.1f);
         barrel.setStyle(Paint.Style.STROKE);
+        barrel.setStrokeCap(Paint.Cap.ROUND);
         c.drawLine(cx, cy, ex, ey, barrel);
-        c.drawCircle(cx, cy, size * 0.1f, barrel);
     }
 
     public JSONObject saveState() {
@@ -378,18 +402,43 @@ public class TankView extends View {
     }
 
     private static class Bullet {
+        static final int HIT_BORDER = -1;
         float x, y;
         int dir;
         boolean fromPlayer;
+        int hitCol = -1, hitRow = -1;
+        private static final float STEP = 0.14f;
+
         Bullet(float x, float y, int dir, boolean fromPlayer) {
             this.x = x; this.y = y; this.dir = dir; this.fromPlayer = fromPlayer;
         }
-        void step() {
-            float s = 0.35f;
-            if (dir == DIR_UP) y -= s;
-            else if (dir == DIR_DOWN) y += s;
-            else if (dir == DIR_LEFT) x -= s;
-            else x += s;
+
+        int cellCol() { return (int) Math.floor(x); }
+        int cellRow() { return (int) Math.floor(y); }
+
+        int advanceAndHit(int[][] map, int cols, int rows) {
+            hitCol = -1;
+            hitRow = -1;
+            for (int i = 0; i < 3; i++) {
+                float nx = x, ny = y;
+                if (dir == DIR_UP) ny -= STEP;
+                else if (dir == DIR_DOWN) ny += STEP;
+                else if (dir == DIR_LEFT) nx -= STEP;
+                else nx += STEP;
+                int c = (int) Math.floor(nx), r = (int) Math.floor(ny);
+                if (c < 0 || c >= cols || r < 0 || r >= rows) return HIT_BORDER;
+                int tile = map[r][c];
+                if (tile == T_BRICK || tile == T_STEEL || tile == T_WATER || tile == T_BASE) {
+                    hitCol = c;
+                    hitRow = r;
+                    x = nx;
+                    y = ny;
+                    return tile;
+                }
+                x = nx;
+                y = ny;
+            }
+            return 0;
         }
     }
 

@@ -7,6 +7,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.speech.tts.TextToSpeech;
+import android.speech.tts.UtteranceProgressListener;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.MotionEvent;
@@ -52,8 +53,20 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     private static final String KEY_DURATION = "game_duration";
     private static final int DEFAULT_DURATION = 60;
 
-    private static final String[] PRAISE = {
-            "太棒啦！", "你真厉害！", "答对啦，真聪明！", "好样的！", "厉害厉害！", "你学会啦！"
+    private static final String[] ENCOURAGE_PREF = {
+            "真棒", "崔恩维你太棒了", "安安你太棒了", "真聪明",
+            "人不犯我我不犯人人若犯我我必犯人", "真棒快要答完了"
+    };
+    private static final String[] ENCOURAGE_EXTRA = {
+            "太厉害了", "答得真好", "你真行", "好样的", "越来越棒了", "继续加油", "真不错"
+    };
+    private static final String[] COMFORT_PREF = {
+            "再试试", "崔恩维你太棒了但是细心点会更好", "安安你就要记住了加油",
+            "慢点", "稳点", "人不犯我我不犯人人若犯我我必犯人", "再认真点就更好了"
+    };
+    private static final String[] COMFORT_EXTRA = {
+            "没关系，下次一定行", "别灰心，慢慢来", "仔细想一想",
+            "加油你可以的", "错了不要紧再努力", "稳住还有机会", "再仔细看看"
     };
 
     private static class Word {
@@ -73,6 +86,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     }
 
     private PinyinBridge pinyinBridge;
+    private final Map<String, String> wordPhrases = new HashMap<>();
     private final List<Word> dictionary = new ArrayList<>();
     private final Set<String> tonedSet = new HashSet<>();
     private final Random rng = new Random();
@@ -98,7 +112,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     private LinearLayout quizPanel, gameHost;
     private FrameLayout gameArea, controlPad, selectOverlay, settingsOverlay;
 
-    private TextView tvProgress, tvHanzi, tvStatsBadge, tvFeedback, tvSelectSub;
+    private TextView tvProgress, tvHanzi, tvStatsBadge, tvSelectSub;
     private ProgressBar progressBar;
     private Button btnNext, btnSettings;
     private LinearLayout examOpts;
@@ -112,6 +126,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         loadPinyinBridge();
+        loadWordPhrases();
         loadDictionary();
         loadStats();
         tts = new TextToSpeech(this, this);
@@ -139,6 +154,22 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
                 pinyinBridge = null;
             }
         }
+    }
+
+    private void loadWordPhrases() {
+        try {
+            InputStream is = getAssets().open("word_phrases.json");
+            BufferedReader r = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder();
+            String line;
+            while ((line = r.readLine()) != null) sb.append(line);
+            r.close();
+            JSONObject o = new JSONObject(sb.toString());
+            for (java.util.Iterator<String> it = o.keys(); it.hasNext(); ) {
+                String k = it.next();
+                wordPhrases.put(k, o.getString(k));
+            }
+        } catch (Exception ignored) { }
     }
 
     private void loadDictionary() {
@@ -241,9 +272,6 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         examOpts.setOrientation(LinearLayout.VERTICAL);
         examOpts.setPadding(dp(0), dp(6), dp(0), dp(6));
         quizPanel.addView(examOpts);
-
-        tvFeedback = textView("", 17, Color.parseColor("#2E7D32"), true);
-        quizPanel.addView(tvFeedback);
 
         btnNext = button("下一题 ➜", Color.parseColor("#FF7043"), Color.WHITE);
         btnNext.setTextSize(TypedValue.COMPLEX_UNIT_SP, 26);
@@ -481,7 +509,6 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         WordStatsManager.Stats st = stats.get(w.hanzi);
         tvStatsBadge.setText("现" + st.appear + " 错" + st.wrong);
         tvHanzi.setText(w.hanzi);
-        tvFeedback.setText("");
         btnNext.setEnabled(false);
 
         int mainIdx = 0;
@@ -514,7 +541,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     }
 
     private void onExamAnswer(ExamItem item, int choice, Button b) {
-        if (questionPassed) return;
+        if (questionPassed || attemptLocked) return;
         Word w = item.word;
         boolean correct = choice == item.correctIdx;
 
@@ -524,9 +551,6 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
             if (stats.get(w.hanzi).pendingRetry) stats.recordFirstCorrectOnRetry(w.hanzi);
             saveStats();
             disableExamOpts();
-            tvFeedback.setTextColor(Color.parseColor("#2E7D32"));
-            tvFeedback.setText(PRAISE[rng.nextInt(PRAISE.length)]);
-            b.setBackgroundColor(Color.parseColor("#C8E6C9"));
             btnNext.setEnabled(true);
             return;
         }
@@ -536,10 +560,6 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
             stats.recordFirstWrong(w.hanzi);
             saveStats();
             tvStatsBadge.setText("现" + stats.get(w.hanzi).appear + " 错" + stats.get(w.hanzi).wrong);
-            tvFeedback.setTextColor(Color.parseColor("#C62828"));
-            tvFeedback.setText("答错了！正确：" + tonedPinyin(w.py, w.tone)
-                    + "。首答错误，本题未通过（可再选，但不会算通过）");
-            b.setBackgroundColor(Color.parseColor("#FFCDD2"));
             btnNext.setEnabled(true);
             return;
         }
@@ -547,18 +567,9 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         if (firstAttemptWrong && correct) {
             attemptLocked = true;
             disableExamOpts();
-            tvFeedback.setTextColor(Color.parseColor("#F57C00"));
-            tvFeedback.setText("答案对了，但首答已错，本题未通过，稍后会再出现");
-            b.setBackgroundColor(Color.parseColor("#FFE0B2"));
-            if (examOpts.getChildAt(item.correctIdx) instanceof Button)
-                ((Button) examOpts.getChildAt(item.correctIdx)).setBackgroundColor(Color.parseColor("#C8E6C9"));
             btnNext.setEnabled(true);
             return;
         }
-
-        tvFeedback.setTextColor(Color.parseColor("#C62828"));
-        tvFeedback.setText("还是不对哦，正确：" + tonedPinyin(w.py, w.tone));
-        b.setBackgroundColor(Color.parseColor("#FFCDD2"));
     }
 
     private void disableExamOpts() {
@@ -568,20 +579,50 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     private void goNext() {
         if (!attemptLocked && !firstAttemptWrong) return;
         btnNext.setEnabled(false);
-        final Word spoken = currentItem().word;
+        final ExamItem item = currentItem();
+        final Word w = item.word;
+        final boolean passed = questionPassed;
         final boolean roundDone = examIndex + 1 >= examQueue.size();
+
+        if (item.correctIdx >= 0 && item.correctIdx < examOpts.getChildCount()) {
+            View cv = examOpts.getChildAt(item.correctIdx);
+            if (cv instanceof Button) cv.setBackgroundColor(Color.parseColor("#C8E6C9"));
+        }
+
+        if (passed) {
+            FeedbackSfx.playEncourage();
+            speakWithCallback(pickEncourage(), "feedback", () ->
+                    speakWithCallback(buildWordPhrase(w), "phrase", () -> advanceAfterNext(roundDone)));
+        } else {
+            FeedbackSfx.playComfort();
+            speakWithCallback(pickComfort(), "feedback", () ->
+                    speakWithCallback(buildWordPhrase(w), "phrase", () -> advanceAfterNext(roundDone)));
+        }
+    }
+
+    private void advanceAfterNext(boolean roundDone) {
         examIndex++;
-        handler.postDelayed(() -> {
-            speakHanzi(spoken.hanzi, TextToSpeech.QUEUE_FLUSH);
-            handler.postDelayed(() -> {
-                if (roundDone) {
-                    quizScroll.setVisibility(View.GONE);
-                    showSelect();
-                } else {
-                    showExamQuestion();
-                }
-            }, 1200);
-        }, 2500);
+        if (roundDone) {
+            quizScroll.setVisibility(View.GONE);
+            showSelect();
+        } else {
+            showExamQuestion();
+        }
+    }
+
+    private String pickEncourage() { return pickWeighted(ENCOURAGE_PREF, ENCOURAGE_EXTRA); }
+    private String pickComfort() { return pickWeighted(COMFORT_PREF, COMFORT_EXTRA); }
+
+    private String pickWeighted(String[] preferred, String[] extra) {
+        List<String> pool = new ArrayList<>();
+        for (String s : preferred) for (int i = 0; i < 3; i++) pool.add(s);
+        Collections.addAll(pool, extra);
+        return pool.get(rng.nextInt(pool.size()));
+    }
+
+    private String buildWordPhrase(Word w) {
+        String phrase = wordPhrases.get(w.hanzi);
+        return phrase != null ? w.hanzi + "，" + phrase : w.hanzi;
     }
 
     private void showSelect() {
@@ -671,21 +712,39 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     }
 
     private void buildTankControls(final TankView tk) {
-        LinearLayout pad = new LinearLayout(this);
-        pad.setOrientation(LinearLayout.VERTICAL);
-        pad.setGravity(Gravity.CENTER);
-        LinearLayout rowMid = new LinearLayout(this);
-        rowMid.setOrientation(LinearLayout.HORIZONTAL);
-        rowMid.setGravity(Gravity.CENTER);
-        rowMid.addView(bindTankBtn(tk, "←", TankView.DIR_LEFT));
-        rowMid.addView(bindTankBtn(tk, "↑", TankView.DIR_UP));
-        Button fire = tankDirBtn("🔥");
+        controlPad.setBackgroundColor(Color.parseColor("#263238"));
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(dp(8), dp(4), dp(8), dp(4));
+
+        LinearLayout dpad = new LinearLayout(this);
+        dpad.setOrientation(LinearLayout.VERTICAL);
+        dpad.setGravity(Gravity.CENTER);
+        LinearLayout dMid = new LinearLayout(this);
+        dMid.setOrientation(LinearLayout.HORIZONTAL);
+        dMid.setGravity(Gravity.CENTER);
+        dMid.addView(bindTankBtn(tk, "↑", TankView.DIR_UP));
+        dpad.addView(dMid);
+        LinearLayout dBot = new LinearLayout(this);
+        dBot.setOrientation(LinearLayout.HORIZONTAL);
+        dBot.setGravity(Gravity.CENTER);
+        dBot.addView(bindTankBtn(tk, "←", TankView.DIR_LEFT));
+        dBot.addView(bindTankBtn(tk, "↓", TankView.DIR_DOWN));
+        dBot.addView(bindTankBtn(tk, "→", TankView.DIR_RIGHT));
+        dpad.addView(dBot);
+
+        Button fire = button("发射", Color.parseColor("#E53935"), Color.WHITE);
+        fire.setTextSize(TypedValue.COMPLEX_UNIT_SP, 22);
         fire.setOnClickListener(v -> tk.fire());
-        rowMid.addView(fire);
-        rowMid.addView(bindTankBtn(tk, "↓", TankView.DIR_DOWN));
-        rowMid.addView(bindTankBtn(tk, "→", TankView.DIR_RIGHT));
-        pad.addView(rowMid);
-        controlPad.addView(pad);
+        LinearLayout.LayoutParams flp = new LinearLayout.LayoutParams(dp(96), dp(96));
+        flp.setMargins(dp(24), dp(0), dp(8), dp(0));
+        fire.setLayoutParams(flp);
+
+        LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        row.addView(dpad, dlp);
+        row.addView(fire);
+        controlPad.addView(row);
     }
 
     private Button bindTankBtn(final TankView tk, String label, final int dir) {
@@ -788,42 +847,29 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         if (status == TextToSpeech.SUCCESS) {
             int res = tts.setLanguage(Locale.CHINESE);
             ttsReady = (res != TextToSpeech.LANG_MISSING_DATA && res != TextToSpeech.LANG_NOT_SUPPORTED);
+            tts.setOnUtteranceProgressListener(new UtteranceProgressListener() {
+                @Override public void onStart(String utteranceId) { }
+                @Override public void onDone(String utteranceId) {
+                    Runnable r = ttsCallbacks.remove(utteranceId);
+                    if (r != null) handler.post(r);
+                }
+                @Override public void onError(String utteranceId) {
+                    Runnable r = ttsCallbacks.remove(utteranceId);
+                    if (r != null) handler.post(r);
+                }
+            });
         }
     }
 
-    private void speakHanzi(String hanzi, int mode) {
-        if (!ttsReady || tts == null || hanzi == null || hanzi.isEmpty()) return;
-        tts.speak(hanzi, mode, null, null);
-    }
+    private final Map<String, Runnable> ttsCallbacks = new HashMap<>();
 
-    private void speakBlend(Word w) {
-        if (!ttsReady || tts == null || w == null) return;
-        if (pinyinBridge != null && pinyinBridge.isWholeSyllable(w.py)) {
-            speakHanzi(w.hanzi, TextToSpeech.QUEUE_FLUSH);
+    private void speakWithCallback(String text, String utteranceId, Runnable onDone) {
+        if (!ttsReady || tts == null || text == null || text.isEmpty()) {
+            if (onDone != null) handler.post(onDone);
             return;
         }
-        List<String> parts = new ArrayList<>();
-        if (pinyinBridge != null && !w.sm.isEmpty()) {
-            String sm = pinyinBridge.initialHanzi(w.sm);
-            if (sm != null && !sm.isEmpty()) parts.add(sm);
-        }
-        if (pinyinBridge != null) {
-            for (int i = 0; i < pinyinBridge.finalParts(w.ym).size(); i++) {
-                String part = pinyinBridge.finalParts(w.ym).get(i);
-                int tone = (i == pinyinBridge.finalParts(w.ym).size() - 1) ? w.tone : 1;
-                String h = pinyinBridge.finalHanzi(w.sm, part, tone);
-                if (!h.isEmpty()) parts.add(h);
-            }
-        }
-        parts.add(w.hanzi);
-        boolean first = true;
-        String prev = null;
-        for (String p : parts) {
-            if (p.equals(prev)) continue;
-            speakHanzi(p, first ? TextToSpeech.QUEUE_FLUSH : TextToSpeech.QUEUE_ADD);
-            first = false;
-            prev = p;
-        }
+        if (onDone != null) ttsCallbacks.put(utteranceId, onDone);
+        tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, utteranceId);
     }
 
     private String tonedPinyin(String py, int tone) {
