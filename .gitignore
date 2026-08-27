@@ -16,3 +16,4 @@ build/
 
 # 保留最终 APK 作为发布产物
 !pinyin-app.apk
+*.class
