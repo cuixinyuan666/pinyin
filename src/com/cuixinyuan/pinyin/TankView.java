@@ -9,7 +9,6 @@ import android.os.Handler;
 import android.os.Looper;
 import android.view.View;
 
-import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
@@ -18,55 +17,66 @@ import java.util.List;
 import java.util.Random;
 
 /**
- * 简易坦克大战（Canvas 实现，参考经典坦克大战玩法，MIT 风格自研集成）。
- * 玩家坦克在底部左右移动并射击，击毁从上方向下移动的敌方坦克得分。
+ * 坦克大战 —— 对标小霸王学习机《坦克大战》/ Battle City 玩法：
+ * 格子地图、砖墙可摧毁、钢墙不可摧毁、基地守护、敌方坦克刷怪与反击。
  */
 public class TankView extends View {
 
     public static final int DIR_UP = 0, DIR_DOWN = 1, DIR_LEFT = 2, DIR_RIGHT = 3;
 
+    private static final int T_EMPTY = 0, T_BRICK = 1, T_STEEL = 2, T_WATER = 3, T_BASE = 4;
+    private static final int COLS = 13, ROWS = 13;
+    private static final int ENEMIES_PER_LEVEL = 12;
+    private static final long TICK_MS = 40;
+    private static final long MOVE_INTERVAL = 120;
+    private static final long SHOT_COOLDOWN = 400;
+    private static final long ENEMY_SHOT_MIN = 900;
+
     private final Paint bgPaint = new Paint();
+    private final Paint brickPaint = new Paint();
+    private final Paint steelPaint = new Paint();
+    private final Paint waterPaint = new Paint();
+    private final Paint basePaint = new Paint();
     private final Paint playerPaint = new Paint();
     private final Paint enemyPaint = new Paint();
     private final Paint bulletPaint = new Paint();
-    private final Paint wallPaint = new Paint();
+    private final Paint textPaint = new Paint();
     private final Random rnd = new Random();
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final List<Bullet> bullets = new ArrayList<>();
-    private final List<Enemy> enemies = new ArrayList<>();
-    private final List<RectF> walls = new ArrayList<>();
+    private final List<EnemyTank> enemies = new ArrayList<>();
+    private final int[][] map = new int[ROWS][COLS];
 
-    private float pw, ph;
-    private float px, py;
-    private int pDir = DIR_UP;
-    private int score = 0;
-    private int lives = 3;
-    private boolean running = false;
+    private float cell;
+    private int px = 4, py = ROWS - 2, pDir = DIR_UP;
     private int moveDir = -1;
-    private long lastShot = 0;
-    private long enemySpawn = 0;
+    private long lastMove, lastShot, lastEnemySpawn, lastEnemyShot;
+    private int score, lives = 3, level = 1;
+    private int enemiesQuota, enemiesSpawned, enemiesKilled;
+    private boolean running, baseAlive = true, playerAlive = true;
+    private long respawnAt;
     private ScoreListener scoreListener;
     private LivesListener livesListener;
 
-    private static final long TICK_MS = 32;
-    private static final long SHOT_COOLDOWN = 350;
-    private static final long ENEMY_INTERVAL = 1800;
+    public interface ScoreListener { void onScore(int s); }
+    public interface LivesListener { void onLives(int l); }
 
     public TankView(Context context) {
         super(context);
-        bgPaint.setColor(Color.parseColor("#263238"));
-        playerPaint.setColor(Color.parseColor("#66BB6A"));
-        playerPaint.setStyle(Paint.Style.FILL);
-        enemyPaint.setColor(Color.parseColor("#EF5350"));
-        enemyPaint.setStyle(Paint.Style.FILL);
-        bulletPaint.setColor(Color.parseColor("#FFEB3B"));
-        bulletPaint.setStyle(Paint.Style.FILL);
-        wallPaint.setColor(Color.parseColor("#546E7A"));
-        wallPaint.setStyle(Paint.Style.FILL);
+        bgPaint.setColor(Color.BLACK);
+        brickPaint.setColor(Color.parseColor("#D84315"));
+        steelPaint.setColor(Color.parseColor("#B0BEC5"));
+        waterPaint.setColor(Color.parseColor("#1565C0"));
+        basePaint.setColor(Color.parseColor("#FFD54F"));
+        playerPaint.setColor(Color.parseColor("#FDD835"));
+        enemyPaint.setColor(Color.parseColor("#E53935"));
+        bulletPaint.setColor(Color.WHITE);
+        textPaint.setColor(Color.WHITE);
+        textPaint.setTextSize(28);
+        textPaint.setAntiAlias(true);
+        loadLevelMap();
+        resetPlayer();
     }
-
-    public interface ScoreListener { void onScore(int score); }
-    public interface LivesListener { void onLives(int lives); }
 
     public void setScoreListener(ScoreListener l) { scoreListener = l; }
     public void setLivesListener(LivesListener l) { livesListener = l; }
@@ -84,143 +94,269 @@ public class TankView extends View {
         handler.removeCallbacks(tick);
     }
 
-    public void setMoveDirection(int dir) { moveDir = dir; }
+    public void setMoveDirection(int dir) { if (playerAlive) moveDir = dir; }
     public void clearMove() { moveDir = -1; }
 
     public void fire() {
-        if (!running) return;
+        if (!running || !playerAlive) return;
         long now = System.currentTimeMillis();
         if (now - lastShot < SHOT_COOLDOWN) return;
+        if (countPlayerBullets() >= 1) return;
         lastShot = now;
-        float bx = px + pw / 2f;
-        float by = py;
-        int bd = DIR_UP;
-        bullets.add(new Bullet(bx, by, bd, true));
+        spawnBullet(px + 0.5f, py + 0.5f, pDir, true);
+    }
+
+    private int countPlayerBullets() {
+        int n = 0;
+        for (Bullet b : bullets) if (b.fromPlayer) n++;
+        return n;
+    }
+
+    private void loadLevelMap() {
+        for (int r = 0; r < ROWS; r++)
+            for (int c = 0; c < COLS; c++) map[r][c] = T_EMPTY;
+
+        // 经典布局：砖墙迷宫 + 钢墙 + 水域 + 底部基地
+        int[][] bricks = {
+                {1,1,1,0,0,0,0,0,0,1,1,1,0},
+                {1,0,0,0,1,1,0,1,1,0,0,1,0},
+                {0,0,1,0,1,0,0,0,1,0,1,0,0},
+                {0,1,1,0,0,0,2,0,0,0,1,1,0},
+                {0,0,0,0,1,0,0,0,1,0,0,0,0},
+                {1,1,0,0,1,1,0,1,1,0,0,1,1},
+                {0,0,0,3,3,0,0,0,3,3,0,0,0},
+                {0,1,0,3,3,0,2,0,3,3,0,1,0},
+                {0,1,0,0,0,0,0,0,0,0,0,1,0},
+                {1,0,0,1,1,0,0,0,1,1,0,0,1},
+                {0,0,0,0,0,0,0,0,0,0,0,0,0},
+                {0,0,1,1,0,1,1,1,0,1,1,0,0},
+                {0,0,1,1,0,1,4,1,0,1,1,0,0},
+        };
+        for (int r = 0; r < ROWS; r++)
+            for (int c = 0; c < COLS; c++)
+                if (bricks[r][c] > 0) map[r][c] = bricks[r][c];
+    }
+
+    private void resetPlayer() {
+        px = 4; py = ROWS - 2; pDir = DIR_UP;
+        playerAlive = true;
+    }
+
+    private void startLevel() {
+        bullets.clear();
+        enemies.clear();
+        enemiesSpawned = 0;
+        enemiesKilled = 0;
+        enemiesQuota = ENEMIES_PER_LEVEL + (level - 1) * 4;
+        baseAlive = true;
+        loadLevelMap();
+        resetPlayer();
     }
 
     @Override
     protected void onSizeChanged(int w, int h, int oldw, int oldh) {
         super.onSizeChanged(w, h, oldw, oldh);
-        pw = w * 0.12f;
-        ph = pw * 0.9f;
-        px = w / 2f - pw / 2f;
-        py = h - ph - dp(8);
-        buildWalls(w, h);
-    }
-
-    private void buildWalls(int w, int h) {
-        walls.clear();
-        float bw = w * 0.18f;
-        float bh = dp(12);
-        walls.add(new RectF(w * 0.2f, h * 0.45f, w * 0.2f + bw, h * 0.45f + bh));
-        walls.add(new RectF(w * 0.6f, h * 0.55f, w * 0.6f + bw, h * 0.55f + bh));
-        walls.add(new RectF(w * 0.35f, h * 0.3f, w * 0.35f + bw * 0.7f, h * 0.3f + bh));
+        cell = Math.min(w / (float) COLS, h / (float) ROWS);
     }
 
     private final Runnable tick = new Runnable() {
-        @Override
-        public void run() {
+        @Override public void run() {
             if (!running) return;
             step();
             invalidate();
-            handler.postDelayed(tick, TICK_MS);
+            handler.postDelayed(this, TICK_MS);
         }
     };
 
     private void step() {
-        float speed = pw * 0.08f;
-        if (moveDir == DIR_LEFT) px -= speed;
-        if (moveDir == DIR_RIGHT) px += speed;
-        px = Math.max(0, Math.min(getWidth() - pw, px));
+        long now = System.currentTimeMillis();
+        if (!playerAlive && now > respawnAt) {
+            playerAlive = true;
+            resetPlayer();
+        }
 
-        RectF player = new RectF(px, py, px + pw, py + ph);
-        for (RectF w : walls) {
-            if (RectF.intersects(player, w)) {
-                if (moveDir == DIR_LEFT) px = w.right;
-                if (moveDir == DIR_RIGHT) px = w.left - pw;
+        if (playerAlive && moveDir >= 0 && now - lastMove > MOVE_INTERVAL) {
+            if (tryMovePlayer(moveDir)) {
+                pDir = moveDir;
+                lastMove = now;
             }
         }
 
-        long now = System.currentTimeMillis();
-        if (now - enemySpawn > ENEMY_INTERVAL && enemies.size() < 5) {
-            enemySpawn = now;
-            float ex = rnd.nextFloat() * (getWidth() - pw);
-            enemies.add(new Enemy(ex, -ph, pw, ph, DIR_DOWN));
+        if (enemiesSpawned < enemiesQuota && enemies.size() < 3 && now - lastEnemySpawn > 2000) {
+            spawnEnemy();
+            lastEnemySpawn = now;
+        }
+
+        for (EnemyTank e : enemies) {
+            if (now - e.lastMove > MOVE_INTERVAL + 40) {
+                if (rnd.nextFloat() < 0.25f) e.dir = rnd.nextInt(4);
+                if (!tryMoveEnemy(e, e.dir)) e.dir = rnd.nextInt(4);
+                e.lastMove = now;
+            }
+            if (now - e.lastShot > ENEMY_SHOT_MIN + rnd.nextInt(800)) {
+                spawnBullet(e.x + 0.5f, e.y + 0.5f, e.dir, false);
+                e.lastShot = now;
+            }
         }
 
         Iterator<Bullet> bi = bullets.iterator();
         while (bi.hasNext()) {
             Bullet b = bi.next();
-            b.step(pw * 0.18f);
-            if (b.x < -20 || b.x > getWidth() + 20 || b.y < -20 || b.y > getHeight() + 20) {
+            b.step();
+            int bc = (int) b.x, br = (int) b.y;
+            if (bc < 0 || bc >= COLS || br < 0 || br >= ROWS) { bi.remove(); continue; }
+
+            int tile = map[br][bc];
+            if (tile == T_BRICK) {
+                map[br][bc] = T_EMPTY;
                 bi.remove();
                 continue;
             }
-            boolean hitWall = false;
-            for (RectF w : walls) {
-                if (w.contains(b.x, b.y)) { hitWall = true; break; }
+            if (tile == T_STEEL || tile == T_WATER) { bi.remove(); continue; }
+            if (tile == T_BASE) {
+                map[br][bc] = T_EMPTY;
+                baseAlive = false;
+                running = false;
+                bi.remove();
+                continue;
             }
-            if (hitWall) { bi.remove(); continue; }
 
             if (b.fromPlayer) {
-                Iterator<Enemy> ei = enemies.iterator();
+                Iterator<EnemyTank> ei = enemies.iterator();
                 while (ei.hasNext()) {
-                    Enemy e = ei.next();
-                    if (e.contains(b.x, b.y)) {
+                    EnemyTank e = ei.next();
+                    if ((int) e.x == bc && (int) e.y == br) {
                         ei.remove();
-                        score += 10;
+                        score += 100;
+                        enemiesKilled++;
                         if (scoreListener != null) scoreListener.onScore(score);
                         bi.remove();
                         break;
                     }
                 }
+            } else if (playerAlive && bc == px && br == py) {
+                hitPlayer();
+                bi.remove();
             }
         }
 
-        Iterator<Enemy> ei = enemies.iterator();
-        while (ei.hasNext()) {
-            Enemy e = ei.next();
-            e.step(pw * 0.04f, getWidth(), getHeight());
-            if (e.y > getHeight() + ph) {
-                ei.remove();
-                loseLife();
-                continue;
-            }
-            if (RectF.intersects(e.bounds(), player)) {
-                ei.remove();
-                loseLife();
+        if (enemiesKilled >= enemiesQuota && enemies.isEmpty() && baseAlive) {
+            level++;
+            startLevel();
+        }
+    }
+
+    private boolean tryMovePlayer(int dir) {
+        int nx = px, ny = py;
+        if (dir == DIR_UP) ny--;
+        else if (dir == DIR_DOWN) ny++;
+        else if (dir == DIR_LEFT) nx--;
+        else nx++;
+        if (canTankAt(nx, ny)) { px = nx; py = ny; return true; }
+        return false;
+    }
+
+    private boolean tryMoveEnemy(EnemyTank e, int dir) {
+        int nx = (int) e.x, ny = (int) e.y;
+        if (dir == DIR_UP) ny--;
+        else if (dir == DIR_DOWN) ny++;
+        else if (dir == DIR_LEFT) nx--;
+        else nx++;
+        if (canTankAt(nx, ny) && !occupiedByPlayer(nx, ny)) {
+            e.x = nx; e.y = ny; return true;
+        }
+        return false;
+    }
+
+    private boolean occupiedByPlayer(int x, int y) {
+        return playerAlive && px == x && py == y;
+    }
+
+    private boolean canTankAt(int x, int y) {
+        if (x < 0 || x >= COLS || y < 0 || y >= ROWS) return false;
+        int t = map[y][x];
+        return t == T_EMPTY || t == T_BASE;
+    }
+
+    private void spawnEnemy() {
+        int[] slots = {0, COLS / 2, COLS - 1};
+        for (int c : slots) {
+            if (canTankAt(c, 0) && !hasEnemyAt(c, 0)) {
+                EnemyTank e = new EnemyTank(c, 0, DIR_DOWN);
+                enemies.add(e);
+                enemiesSpawned++;
+                return;
             }
         }
     }
 
-    private void loseLife() {
+    private boolean hasEnemyAt(int x, int y) {
+        for (EnemyTank e : enemies) if ((int) e.x == x && (int) e.y == y) return true;
+        return false;
+    }
+
+    private void spawnBullet(float x, float y, int dir, boolean fromPlayer) {
+        bullets.add(new Bullet(x, y, dir, fromPlayer));
+    }
+
+    private void hitPlayer() {
+        playerAlive = false;
         lives--;
         if (livesListener != null) livesListener.onLives(lives);
-        if (lives <= 0) stopGame();
+        if (lives <= 0) { running = false; return; }
+        respawnAt = System.currentTimeMillis() + 1500;
     }
 
     @Override
     protected void onDraw(Canvas canvas) {
+        float ox = (getWidth() - cell * COLS) / 2f;
+        float oy = (getHeight() - cell * ROWS) / 2f;
         canvas.drawRect(0, 0, getWidth(), getHeight(), bgPaint);
-        for (RectF w : walls) canvas.drawRect(w, wallPaint);
-        drawTank(canvas, px, py, pw, ph, pDir, playerPaint);
-        for (Enemy e : enemies) drawTank(canvas, e.x, e.y, e.w, e.h, e.dir, enemyPaint);
-        for (Bullet b : bullets) canvas.drawCircle(b.x, b.y, pw * 0.08f, bulletPaint);
+
+        for (int r = 0; r < ROWS; r++) {
+            for (int c = 0; c < COLS; c++) {
+                float x = ox + c * cell, y = oy + r * cell;
+                int t = map[r][c];
+                if (t == T_BRICK) canvas.drawRect(x, y, x + cell, y + cell, brickPaint);
+                else if (t == T_STEEL) canvas.drawRect(x, y, x + cell, y + cell, steelPaint);
+                else if (t == T_WATER) canvas.drawRect(x, y, x + cell, y + cell, waterPaint);
+                else if (t == T_BASE) {
+                    canvas.drawRect(x, y, x + cell, y + cell, basePaint);
+                    canvas.drawRect(x + cell * 0.2f, y + cell * 0.2f,
+                            x + cell * 0.8f, y + cell * 0.8f, enemyPaint);
+                }
+            }
+        }
+
+        for (EnemyTank e : enemies)
+            drawTank(canvas, ox + e.x * cell, oy + e.y * cell, cell, e.dir, enemyPaint);
+        if (playerAlive)
+            drawTank(canvas, ox + px * cell, oy + py * cell, cell, pDir, playerPaint);
+        for (Bullet b : bullets)
+            canvas.drawCircle(ox + b.x * cell, oy + b.y * cell, cell * 0.12f, bulletPaint);
+
+        canvas.drawText("关" + level + " 敌" + Math.max(0, enemiesQuota - enemiesKilled),
+                ox + 4, oy - 6, textPaint);
+        if (!running && !baseAlive)
+            canvas.drawText("基地被毁!", getWidth() / 2f - 60, getHeight() / 2f, textPaint);
+        else if (!running && lives <= 0)
+            canvas.drawText("游戏结束", getWidth() / 2f - 50, getHeight() / 2f, textPaint);
     }
 
-    private void drawTank(Canvas c, float x, float y, float w, float h, int dir, Paint paint) {
-        c.drawRoundRect(new RectF(x, y, x + w, y + h), 6, 6, paint);
-        float cx = x + w / 2f, cy = y + h / 2f;
-        float len = w * 0.45f;
+    private void drawTank(Canvas c, float x, float y, float size, int dir, Paint body) {
+        float pad = size * 0.08f;
+        c.drawRoundRect(new RectF(x + pad, y + pad, x + size - pad, y + size - pad), 4, 4, body);
+        float cx = x + size / 2f, cy = y + size / 2f, len = size * 0.38f;
         float ex = cx, ey = cy;
         if (dir == DIR_UP) ey -= len;
         else if (dir == DIR_DOWN) ey += len;
         else if (dir == DIR_LEFT) ex -= len;
         else ex += len;
-        Paint barrel = new Paint(paint);
-        barrel.setStrokeWidth(w * 0.15f);
+        Paint barrel = new Paint(body);
+        barrel.setStrokeWidth(size * 0.14f);
         barrel.setStyle(Paint.Style.STROKE);
         c.drawLine(cx, cy, ex, ey, barrel);
+        c.drawCircle(cx, cy, size * 0.1f, barrel);
     }
 
     public JSONObject saveState() {
@@ -228,18 +364,17 @@ public class TankView extends View {
         try {
             o.put("score", score);
             o.put("lives", lives);
+            o.put("level", level);
         } catch (Exception ignored) { }
         return o;
     }
 
     public void restoreState(JSONObject o) {
-        if (o == null) return;
+        if (o == null) { startLevel(); return; }
         score = o.optInt("score", 0);
         lives = o.optInt("lives", 3);
-    }
-
-    private int dp(int v) {
-        return (int) (v * getResources().getDisplayMetrics().density);
+        level = o.optInt("level", 1);
+        startLevel();
     }
 
     private static class Bullet {
@@ -249,7 +384,8 @@ public class TankView extends View {
         Bullet(float x, float y, int dir, boolean fromPlayer) {
             this.x = x; this.y = y; this.dir = dir; this.fromPlayer = fromPlayer;
         }
-        void step(float s) {
+        void step() {
+            float s = 0.35f;
             if (dir == DIR_UP) y -= s;
             else if (dir == DIR_DOWN) y += s;
             else if (dir == DIR_LEFT) x -= s;
@@ -257,18 +393,13 @@ public class TankView extends View {
         }
     }
 
-    private static class Enemy {
-        float x, y, w, h;
+    private static class EnemyTank {
+        float x, y;
         int dir;
-        Enemy(float x, float y, float w, float h, int dir) {
-            this.x = x; this.y = y; this.w = w; this.h = h; this.dir = dir;
+        long lastMove, lastShot;
+        EnemyTank(int x, int y, int dir) {
+            this.x = x; this.y = y; this.dir = dir;
+            lastMove = lastShot = System.currentTimeMillis();
         }
-        void step(float s, int maxW, int maxH) {
-            if (dir == DIR_DOWN) y += s;
-            else if (dir == DIR_LEFT) { x -= s; if (x < 0) dir = DIR_RIGHT; }
-            else if (dir == DIR_RIGHT) { x += s; if (x + w > maxW) dir = DIR_LEFT; }
-        }
-        RectF bounds() { return new RectF(x, y, x + w, y + h); }
-        boolean contains(float bx, float by) { return bounds().contains(bx, by); }
     }
 }

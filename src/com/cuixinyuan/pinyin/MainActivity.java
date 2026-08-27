@@ -100,7 +100,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
 
     private TextView tvProgress, tvHanzi, tvStatsBadge, tvFeedback, tvSelectSub;
     private ProgressBar progressBar;
-    private Button btnSpeak, btnNext, btnSettings;
+    private Button btnNext, btnSettings;
     private LinearLayout examOpts;
     private List<Button> durationButtons = new ArrayList<>();
 
@@ -236,10 +236,6 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         hanziBox.addView(tvStatsBadge, bp);
         quizPanel.addView(hanziBox);
 
-        btnSpeak = button("🔊 听一听", Color.parseColor("#FFB74D"), Color.WHITE);
-        btnSpeak.setOnClickListener(v -> speakBlend(currentItem().word));
-        quizPanel.addView(btnSpeak);
-
         quizPanel.addView(textView("请选择正确拼音", 16, Color.parseColor("#5D4037"), false));
         examOpts = new LinearLayout(this);
         examOpts.setOrientation(LinearLayout.VERTICAL);
@@ -250,8 +246,13 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         quizPanel.addView(tvFeedback);
 
         btnNext = button("下一题 ➜", Color.parseColor("#FF7043"), Color.WHITE);
+        btnNext.setTextSize(TypedValue.COMPLEX_UNIT_SP, 26);
         btnNext.setEnabled(false);
         btnNext.setOnClickListener(v -> goNext());
+        LinearLayout.LayoutParams nlp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(68));
+        nlp.setMargins(dp(0), dp(12), dp(0), dp(8));
+        btnNext.setLayoutParams(nlp);
         quizPanel.addView(btnNext);
     }
 
@@ -526,7 +527,6 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
             tvFeedback.setTextColor(Color.parseColor("#2E7D32"));
             tvFeedback.setText(PRAISE[rng.nextInt(PRAISE.length)]);
             b.setBackgroundColor(Color.parseColor("#C8E6C9"));
-            speakBlend(w);
             btnNext.setEnabled(true);
             return;
         }
@@ -567,13 +567,21 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
 
     private void goNext() {
         if (!attemptLocked && !firstAttemptWrong) return;
+        btnNext.setEnabled(false);
+        final Word spoken = currentItem().word;
+        final boolean roundDone = examIndex + 1 >= examQueue.size();
         examIndex++;
-        if (examIndex >= examQueue.size()) {
-            quizScroll.setVisibility(View.GONE);
-            showSelect();
-            return;
-        }
-        showExamQuestion();
+        handler.postDelayed(() -> {
+            speakHanzi(spoken.hanzi, TextToSpeech.QUEUE_FLUSH);
+            handler.postDelayed(() -> {
+                if (roundDone) {
+                    quizScroll.setVisibility(View.GONE);
+                    showSelect();
+                } else {
+                    showExamQuestion();
+                }
+            }, 1200);
+        }, 2500);
     }
 
     private void showSelect() {
@@ -663,25 +671,40 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     }
 
     private void buildTankControls(final TankView tk) {
-        LinearLayout row = new LinearLayout(this);
-        row.setOrientation(LinearLayout.HORIZONTAL);
-        row.setGravity(Gravity.CENTER);
-        Button left = dirBtn("←", null);
-        left.setOnTouchListener((v, e) -> {
-            if (e.getAction() == MotionEvent.ACTION_DOWN) tk.setMoveDirection(TankView.DIR_LEFT);
+        LinearLayout pad = new LinearLayout(this);
+        pad.setOrientation(LinearLayout.VERTICAL);
+        pad.setGravity(Gravity.CENTER);
+        LinearLayout rowMid = new LinearLayout(this);
+        rowMid.setOrientation(LinearLayout.HORIZONTAL);
+        rowMid.setGravity(Gravity.CENTER);
+        rowMid.addView(bindTankBtn(tk, "←", TankView.DIR_LEFT));
+        rowMid.addView(bindTankBtn(tk, "↑", TankView.DIR_UP));
+        Button fire = tankDirBtn("🔥");
+        fire.setOnClickListener(v -> tk.fire());
+        rowMid.addView(fire);
+        rowMid.addView(bindTankBtn(tk, "↓", TankView.DIR_DOWN));
+        rowMid.addView(bindTankBtn(tk, "→", TankView.DIR_RIGHT));
+        pad.addView(rowMid);
+        controlPad.addView(pad);
+    }
+
+    private Button bindTankBtn(final TankView tk, String label, final int dir) {
+        Button b = tankDirBtn(label);
+        b.setOnTouchListener((v, e) -> {
+            if (e.getAction() == MotionEvent.ACTION_DOWN) tk.setMoveDirection(dir);
             if (e.getAction() == MotionEvent.ACTION_UP || e.getAction() == MotionEvent.ACTION_CANCEL) tk.clearMove();
             return true;
         });
-        Button right = dirBtn("→", null);
-        right.setOnTouchListener((v, e) -> {
-            if (e.getAction() == MotionEvent.ACTION_DOWN) tk.setMoveDirection(TankView.DIR_RIGHT);
-            if (e.getAction() == MotionEvent.ACTION_UP || e.getAction() == MotionEvent.ACTION_CANCEL) tk.clearMove();
-            return true;
-        });
-        row.addView(left);
-        row.addView(dirBtn("🔥", tk::fire));
-        row.addView(right);
-        controlPad.addView(row);
+        return b;
+    }
+
+    private Button tankDirBtn(String t) {
+        Button b = button(t, Color.parseColor("#37474F"), Color.WHITE);
+        b.setTextSize(TypedValue.COMPLEX_UNIT_SP, 24);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(64), dp(56));
+        lp.setMargins(dp(4), dp(2), dp(4), dp(2));
+        b.setLayoutParams(lp);
+        return b;
     }
 
     private Button dirBtn(String t, final Runnable a) {
