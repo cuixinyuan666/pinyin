@@ -77,11 +77,13 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     //
     // 声母 → 用该声母的「呼读音」对应汉字朗读（《汉语拼音方案》标准呼读音）。
     // 例：b→玻 p→坡 m→摸 f→佛 d→得 t→特 j→鸡 q→七 x→西 sh→诗 …
+    // 挑选例字时刻意避开多音字，避免 TTS 读错：
+    //   b→波(bō，非「玻」)  d→德(dé，非「得」de/děi 多音)  l→了(le，非「勒」lēi≈累)
     private static final Map<String, String> INITIAL_HANZI = new HashMap<>();
     static {
-        INITIAL_HANZI.put("b", "玻"); INITIAL_HANZI.put("p", "坡"); INITIAL_HANZI.put("m", "摸");
-        INITIAL_HANZI.put("f", "佛"); INITIAL_HANZI.put("d", "得"); INITIAL_HANZI.put("t", "特");
-        INITIAL_HANZI.put("n", "讷"); INITIAL_HANZI.put("l", "勒"); INITIAL_HANZI.put("g", "哥");
+        INITIAL_HANZI.put("b", "波"); INITIAL_HANZI.put("p", "坡"); INITIAL_HANZI.put("m", "摸");
+        INITIAL_HANZI.put("f", "佛"); INITIAL_HANZI.put("d", "德"); INITIAL_HANZI.put("t", "特");
+        INITIAL_HANZI.put("n", "讷"); INITIAL_HANZI.put("l", "了"); INITIAL_HANZI.put("g", "哥");
         INITIAL_HANZI.put("k", "科"); INITIAL_HANZI.put("h", "喝"); INITIAL_HANZI.put("j", "鸡");
         INITIAL_HANZI.put("q", "七"); INITIAL_HANZI.put("x", "西"); INITIAL_HANZI.put("zh", "知");
         INITIAL_HANZI.put("ch", "吃"); INITIAL_HANZI.put("sh", "诗"); INITIAL_HANZI.put("r", "日");
@@ -123,9 +125,22 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         FINAL_HANZI.put("ui",   new String[]{"威", "围", "伟", "位"});
         FINAL_HANZI.put("uan",  new String[]{"弯", "完", "晚", "万"});
         FINAL_HANZI.put("un",   new String[]{"温", "文", "稳", "问"});
+        FINAL_HANZI.put("ün",   new String[]{"晕", "云", "允", "运"});
         FINAL_HANZI.put("uang", new String[]{"汪", "王", "往", "忘"});
         FINAL_HANZI.put("ue",   new String[]{"约", "",   "",   "月"});
         FINAL_HANZI.put("üe",   new String[]{"约", "",   "",   "月"});
+    }
+
+    // 数据里韵母 u / un 未区分 u 与 ü：拼音规则「j/q/x/y + u」实为 ü（如 去 qù、鱼 yú、雨 yǔ），
+    // 「j/q/x/y + un」实为 ün（如 云 yún）。据声母把韵母键纠正到 ü/ün，避免读成 u/un。
+    private static boolean isJqxyOrY(String sm) {
+        return "j".equals(sm) || "q".equals(sm) || "x".equals(sm) || "y".equals(sm);
+    }
+
+    private static String effectiveFinalKey(String sm, String ym) {
+        if ("u".equals(ym) && isJqxyOrY(sm)) return "ü";
+        if ("un".equals(ym) && isJqxyOrY(sm)) return "ün";
+        return ym;
     }
 
     // ====== 数据 ======
@@ -1007,10 +1022,10 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         tts.speak(hanzi, queueMode, null, null);
     }
 
-    /** 取某韵母在指定声调（1..4）下的例字；没有合适例字时返回空串。 */
-    private String finalHanzi(String ym, int tone) {
+    /** 取某韵母在指定声调（1..4）下的例字；结合声母纠正 u→ü / un→ün；无例字返回空串。 */
+    private String finalHanzi(String sm, String ym, int tone) {
         if (ym == null || tone < 1 || tone > 4) return "";
-        String[] arr = FINAL_HANZI.get(ym);
+        String[] arr = FINAL_HANZI.get(effectiveFinalKey(sm, ym));
         if (arr == null || arr.length < 4) return "";
         String h = arr[tone - 1];
         return h == null ? "" : h;
@@ -1025,18 +1040,15 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     /** 朗读韵母：按本字实际声调，朗读该韵母对应声调的例字（如「少」的 ao 三声→袄）；
      *  无例字时回退朗读本字，仍是正确中文发音，绝不读英文字母。 */
     private void speakFinal(String s) {
-        String h = finalHanzi(s, currentWord().tone);
-        if (h.isEmpty()) h = currentWord().hanzi;
+        Word w = currentWord();
+        String h = finalHanzi(w.sm, s, w.tone);
+        if (h.isEmpty()) h = w.hanzi;
         speakHanzi(h, TextToSpeech.QUEUE_FLUSH);
     }
 
-    /** 朗读本字韵母在指定声调下的读音（供声调按钮使用）：用例字发音；
-     *  无例字时：若所选声调即本字声调则读本字，否则回退读本字，绝不读英文字母。 */
+    /** 声调按钮：直接朗读当前汉字本身（即本字的真实声调），不再统一用「a（啊）」示范。 */
     private void speakToneOfCurrent(int tone) {
-        Word w = currentWord();
-        String h = finalHanzi(w.ym, tone);
-        if (h.isEmpty()) h = w.hanzi;
-        speakHanzi(h, TextToSpeech.QUEUE_FLUSH);
+        speakHanzi(currentWord().hanzi, TextToSpeech.QUEUE_FLUSH);
     }
 
     /** 整段拼读：声母呼读音字 + 本字声调的韵母例字 + 本字（如 少 → 诗 + 袄 + 少）。
@@ -1049,7 +1061,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
             String sm = INITIAL_HANZI.get(w.sm);
             if (sm != null && !sm.isEmpty()) parts.add(sm);
         }
-        String ym = finalHanzi(w.ym, w.tone);
+        String ym = finalHanzi(w.sm, w.ym, w.tone);
         if (!ym.isEmpty()) parts.add(ym);
         parts.add(w.hanzi);
 
