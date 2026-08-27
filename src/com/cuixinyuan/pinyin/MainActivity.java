@@ -71,19 +71,61 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     private static final String[] TONE_MARK = {"ā", "á", "ǎ", "à"};
     private static final String[] TONE_NAME = {"一声", "二声", "三声", "四声"};
 
-    // 声母标准呼读音（小学语文《汉语拼音方案》）：一律使用带调拼音音节，
-    // 中文 TTS 才能按汉字发音朗读，绝不使用无调拼音/英文字母。
-    // 例：b→bō(玻) p→pō(坡) m→mō(摸) f→fō(佛) d→dē(得) t→tē(特) x→xī(希)
-    private static final Map<String, String> INITIAL_READ = new HashMap<>();
+    // ★ 发音核心修复 ★
+    // Android 中文 TTS 无法可靠地把「拉丁拼音字符串」当作汉语朗读——它会把 b、sh、ao
+    // 之类按【英文字母】读出，这正是「读成英文」的根因。可靠做法：一律给 TTS 传【汉字】。
+    //
+    // 声母 → 用该声母的「呼读音」对应汉字朗读（《汉语拼音方案》标准呼读音）。
+    // 例：b→玻 p→坡 m→摸 f→佛 d→得 t→特 j→鸡 q→七 x→西 sh→诗 …
+    private static final Map<String, String> INITIAL_HANZI = new HashMap<>();
     static {
-        INITIAL_READ.put("b", "bō"); INITIAL_READ.put("p", "pō"); INITIAL_READ.put("m", "mō");
-        INITIAL_READ.put("f", "fō"); INITIAL_READ.put("d", "dē"); INITIAL_READ.put("t", "tē");
-        INITIAL_READ.put("n", "nē"); INITIAL_READ.put("l", "lē"); INITIAL_READ.put("g", "gē");
-        INITIAL_READ.put("k", "kē"); INITIAL_READ.put("h", "hē"); INITIAL_READ.put("j", "jī");
-        INITIAL_READ.put("q", "qī"); INITIAL_READ.put("x", "xī"); INITIAL_READ.put("zh", "zhī");
-        INITIAL_READ.put("ch", "chī"); INITIAL_READ.put("sh", "shī"); INITIAL_READ.put("r", "rī");
-        INITIAL_READ.put("z", "zī"); INITIAL_READ.put("c", "cī"); INITIAL_READ.put("s", "sī");
-        INITIAL_READ.put("y", "yī"); INITIAL_READ.put("w", "wū");
+        INITIAL_HANZI.put("b", "玻"); INITIAL_HANZI.put("p", "坡"); INITIAL_HANZI.put("m", "摸");
+        INITIAL_HANZI.put("f", "佛"); INITIAL_HANZI.put("d", "得"); INITIAL_HANZI.put("t", "特");
+        INITIAL_HANZI.put("n", "讷"); INITIAL_HANZI.put("l", "勒"); INITIAL_HANZI.put("g", "哥");
+        INITIAL_HANZI.put("k", "科"); INITIAL_HANZI.put("h", "喝"); INITIAL_HANZI.put("j", "鸡");
+        INITIAL_HANZI.put("q", "七"); INITIAL_HANZI.put("x", "西"); INITIAL_HANZI.put("zh", "知");
+        INITIAL_HANZI.put("ch", "吃"); INITIAL_HANZI.put("sh", "诗"); INITIAL_HANZI.put("r", "日");
+        INITIAL_HANZI.put("z", "资"); INITIAL_HANZI.put("c", "疵"); INITIAL_HANZI.put("s", "思");
+        INITIAL_HANZI.put("y", "衣"); INITIAL_HANZI.put("w", "屋");
+    }
+
+    // 韵母 → 该韵母【四个声调】各自的例字（数组下标 0..3 对应 1..4 声）。
+    // 用整体认读音节（y/w 开头）的独体字，让 TTS 读出纯正的韵母 + 声调。
+    // 空串表示该「韵母+声调」无常用例字：此时回退朗读【本字汉字】，保证仍是正确中文发音。
+    private static final Map<String, String[]> FINAL_HANZI = new HashMap<>();
+    static {
+        FINAL_HANZI.put("a",    new String[]{"阿", "",   "",   "啊"});
+        FINAL_HANZI.put("o",    new String[]{"喔", "",   "",   "哦"});
+        FINAL_HANZI.put("e",    new String[]{"婀", "鹅", "恶", "饿"});
+        FINAL_HANZI.put("i",    new String[]{"衣", "移", "椅", "意"});
+        FINAL_HANZI.put("u",    new String[]{"乌", "无", "五", "物"});
+        FINAL_HANZI.put("ü",    new String[]{"迂", "鱼", "雨", "玉"});
+        FINAL_HANZI.put("er",   new String[]{"",   "而", "耳", "二"});
+        FINAL_HANZI.put("ai",   new String[]{"哀", "挨", "矮", "爱"});
+        FINAL_HANZI.put("ei",   new String[]{"",   "",   "",   ""});
+        FINAL_HANZI.put("ao",   new String[]{"凹", "熬", "袄", "奥"});
+        FINAL_HANZI.put("ou",   new String[]{"欧", "",   "偶", ""});
+        FINAL_HANZI.put("an",   new String[]{"安", "",   "俺", "按"});
+        FINAL_HANZI.put("en",   new String[]{"恩", "",   "",   ""});
+        FINAL_HANZI.put("ang",  new String[]{"",   "昂", "",   ""});
+        FINAL_HANZI.put("eng",  new String[]{"",   "",   "",   ""});
+        FINAL_HANZI.put("ong",  new String[]{"",   "",   "",   ""});
+        FINAL_HANZI.put("ia",   new String[]{"呀", "牙", "哑", "亚"});
+        FINAL_HANZI.put("ie",   new String[]{"耶", "爷", "也", "页"});
+        FINAL_HANZI.put("iao",  new String[]{"腰", "摇", "咬", "要"});
+        FINAL_HANZI.put("iu",   new String[]{"优", "油", "有", "右"});
+        FINAL_HANZI.put("ian",  new String[]{"烟", "严", "眼", "厌"});
+        FINAL_HANZI.put("in",   new String[]{"音", "银", "引", "印"});
+        FINAL_HANZI.put("ing",  new String[]{"英", "迎", "影", "硬"});
+        FINAL_HANZI.put("ua",   new String[]{"挖", "娃", "瓦", "袜"});
+        FINAL_HANZI.put("uo",   new String[]{"窝", "",   "我", "卧"});
+        FINAL_HANZI.put("uai",  new String[]{"歪", "",   "",   "外"});
+        FINAL_HANZI.put("ui",   new String[]{"威", "围", "伟", "位"});
+        FINAL_HANZI.put("uan",  new String[]{"弯", "完", "晚", "万"});
+        FINAL_HANZI.put("un",   new String[]{"温", "文", "稳", "问"});
+        FINAL_HANZI.put("uang", new String[]{"汪", "王", "往", "忘"});
+        FINAL_HANZI.put("ue",   new String[]{"约", "",   "",   "月"});
+        FINAL_HANZI.put("üe",   new String[]{"约", "",   "",   "月"});
     }
 
     // ====== 数据 ======
@@ -573,8 +615,8 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
             b.setTextSize(TypedValue.COMPLEX_UNIT_SP, 32);
             b.setTag(s);
             b.setOnClickListener(v -> {
-                if (s.isEmpty()) speakSyllable(w.py);   // 零声母：朗读整个音节
-                else speakInitial(s);                    // 声母按标准拼音读法
+                if (s.isEmpty()) speakHanzi(w.hanzi, TextToSpeech.QUEUE_FLUSH); // 零声母：读本字
+                else speakInitial(s);                                          // 声母读呼读音汉字
                 selectedSm = s; highlight(smRow, s); evaluate();
             });
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(64), dp(50));
@@ -616,8 +658,8 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
             b.setTextSize(TypedValue.COMPLEX_UNIT_SP, 18);
             b.setTag(t);
             b.setOnClickListener(v -> {
-                // 声调跟随对应汉字的韵母发声：朗读带调整个音节（声调落在韵母上）
-                speakSyllable(tonedPinyin(currentWord().py, t));
+                // 声调跟随对应汉字的韵母发声：用韵母例字朗读所选声调（无例字回退本字）
+                speakToneOfCurrent(t);
                 selectedTone = t; highlight(toneRow, t); evaluate();
             });
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(64), dp(52));
@@ -959,36 +1001,66 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         }
     }
 
-    /** 朗读声母：按《汉语拼音方案》标准呼读音（如 t→tē 特），绝不读英文字母 */
+    /** 朗读一个汉字（这是让中文 TTS 发出正确读音的唯一可靠方式）。 */
+    private void speakHanzi(String hanzi, int queueMode) {
+        if (!ttsReady || tts == null || hanzi == null || hanzi.isEmpty()) return;
+        tts.speak(hanzi, queueMode, null, null);
+    }
+
+    /** 取某韵母在指定声调（1..4）下的例字；没有合适例字时返回空串。 */
+    private String finalHanzi(String ym, int tone) {
+        if (ym == null || tone < 1 || tone > 4) return "";
+        String[] arr = FINAL_HANZI.get(ym);
+        if (arr == null || arr.length < 4) return "";
+        String h = arr[tone - 1];
+        return h == null ? "" : h;
+    }
+
+    /** 朗读声母：用该声母的呼读音汉字（如 sh→诗、t→特），绝不读英文字母。 */
     private void speakInitial(String s) {
-        if (!ttsReady || tts == null || s == null || s.isEmpty()) return;
-        String read = INITIAL_READ.get(s);
-        if (read != null && !read.isEmpty()) tts.speak(read, TextToSpeech.QUEUE_FLUSH, null, null);
+        String read = INITIAL_HANZI.get(s);
+        speakHanzi(read, TextToSpeech.QUEUE_FLUSH);
     }
 
-    /** 朗读韵母：按当前汉字所属韵母的实际声调带调朗读（如「少」选 ao → ǎo），绝不读无调/英文字母 */
+    /** 朗读韵母：按本字实际声调，朗读该韵母对应声调的例字（如「少」的 ao 三声→袄）；
+     *  无例字时回退朗读本字，仍是正确中文发音，绝不读英文字母。 */
     private void speakFinal(String s) {
-        if (!ttsReady || tts == null || s == null || s.isEmpty()) return;
-        tts.speak(tonedPinyin(s, currentWord().tone), TextToSpeech.QUEUE_FLUSH, null, null);
+        String h = finalHanzi(s, currentWord().tone);
+        if (h.isEmpty()) h = currentWord().hanzi;
+        speakHanzi(h, TextToSpeech.QUEUE_FLUSH);
     }
 
-    /** 朗读一个完整拼音音节（带调） */
-    private void speakSyllable(String s) {
-        if (!ttsReady || tts == null || s == null || s.isEmpty()) return;
-        tts.speak(s, TextToSpeech.QUEUE_FLUSH, null, null);
+    /** 朗读本字韵母在指定声调下的读音（供声调按钮使用）：用例字发音；
+     *  无例字时：若所选声调即本字声调则读本字，否则回退读本字，绝不读英文字母。 */
+    private void speakToneOfCurrent(int tone) {
+        Word w = currentWord();
+        String h = finalHanzi(w.ym, tone);
+        if (h.isEmpty()) h = w.hanzi;
+        speakHanzi(h, TextToSpeech.QUEUE_FLUSH);
     }
 
-    /** 整段拼读：声母呼读音 + 带本字声调的韵母 + 汉字（如 少 → shī + ǎo + 少；零声母 → 带调整音节 + 汉字） */
+    /** 整段拼读：声母呼读音字 + 本字声调的韵母例字 + 本字（如 少 → 诗 + 袄 + 少）。
+     *  零声母或缺例字时自动跳过对应片段，并始终以本字收尾；跳过与相邻片段相同的字，
+     *  避免「爱 爱」「衣 衣 一」这类重复，保证全部为正确中文发音。 */
     private void speakBlend(Word w) {
         if (!ttsReady || tts == null || w == null) return;
-        if (w.sm.isEmpty()) {
-            tts.speak(tonedPinyin(w.py, w.tone), TextToSpeech.QUEUE_FLUSH, null, null);
-        } else {
-            String sm = INITIAL_READ.get(w.sm);
-            if (sm != null && !sm.isEmpty()) tts.speak(sm, TextToSpeech.QUEUE_FLUSH, null, null);
-            tts.speak(tonedPinyin(w.ym, w.tone), TextToSpeech.QUEUE_ADD, null, null);
+        List<String> parts = new ArrayList<>();
+        if (!w.sm.isEmpty()) {
+            String sm = INITIAL_HANZI.get(w.sm);
+            if (sm != null && !sm.isEmpty()) parts.add(sm);
         }
-        tts.speak(w.hanzi, TextToSpeech.QUEUE_ADD, null, null);
+        String ym = finalHanzi(w.ym, w.tone);
+        if (!ym.isEmpty()) parts.add(ym);
+        parts.add(w.hanzi);
+
+        boolean first = true;
+        String prev = null;
+        for (String p : parts) {
+            if (p.equals(prev)) continue;                 // 跳过与上一段相同的字，避免重复朗读
+            speakHanzi(p, first ? TextToSpeech.QUEUE_FLUSH : TextToSpeech.QUEUE_ADD);
+            first = false;
+            prev = p;
+        }
     }
 
     // ===================== 小工具 =====================
