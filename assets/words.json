@@ -122,7 +122,7 @@
     "word": "月",
     "py": "yue",
     "sm": "y",
-    "ym": "ue",
+    "ym": "üe",
     "tone": 4
   },
   {
@@ -190,16 +190,16 @@
   },
   {
     "word": "虫",
-    "py": "chong",
-    "sm": "ch",
-    "ym": "ong",
-    "tone": 2
+    "py": "hui",
+    "sm": "h",
+    "ym": "ui",
+    "tone": 3
   },
   {
     "word": "鱼",
     "py": "yu",
     "sm": "y",
-    "ym": "u",
+    "ym": "ü",
     "tone": 2
   },
   {
@@ -298,7 +298,7 @@
     "py": "shao",
     "sm": "sh",
     "ym": "ao",
-    "tone": 3
+    "tone": 4
   },
   {
     "word": "上",
@@ -333,7 +333,7 @@
     "py": "qian",
     "sm": "q",
     "ym": "ian",
-    "tone": 2
+    "tone": 3
   },
   {
     "word": "后",
@@ -353,7 +353,7 @@
     "word": "去",
     "py": "qu",
     "sm": "q",
-    "ym": "u",
+    "ym": "ü",
     "tone": 4
   },
   {
@@ -395,14 +395,14 @@
     "word": "云",
     "py": "yun",
     "sm": "y",
-    "ym": "un",
+    "ym": "ün",
     "tone": 2
   },
   {
     "word": "雨",
     "py": "yu",
     "sm": "y",
-    "ym": "u",
+    "ym": "ü",
     "tone": 3
   },
   {
@@ -512,10 +512,10 @@
   },
   {
     "word": "她",
-    "py": "ta",
-    "sm": "t",
-    "ym": "a",
-    "tone": 1
+    "py": "jie",
+    "sm": "j",
+    "ym": "ie",
+    "tone": 3
   },
   {
     "word": "好",
@@ -540,10 +540,10 @@
   },
   {
     "word": "喝",
-    "py": "he",
-    "sm": "h",
+    "py": "ye",
+    "sm": "y",
     "ym": "e",
-    "tone": 1
+    "tone": 4
   },
   {
     "word": "笑",
@@ -571,7 +571,7 @@
     "py": "pao",
     "sm": "p",
     "ym": "ao",
-    "tone": 3
+    "tone": 2
   },
   {
     "word": "飞",
@@ -589,10 +589,10 @@
   },
   {
     "word": "听",
-    "py": "ting",
-    "sm": "t",
-    "ym": "ing",
-    "tone": 1
+    "py": "yin",
+    "sm": "y",
+    "ym": "in",
+    "tone": 3
   },
   {
     "word": "说",
@@ -638,8 +638,8 @@
   },
   {
     "word": "校",
-    "py": "xiao",
-    "sm": "x",
+    "py": "jiao",
+    "sm": "j",
     "ym": "iao",
     "tone": 4
   },
@@ -666,9 +666,9 @@
   },
   {
     "word": "灯",
-    "py": "deng",
+    "py": "ding",
     "sm": "d",
-    "ym": "eng",
+    "ym": "ing",
     "tone": 1
   },
   {
@@ -683,7 +683,7 @@
     "py": "yi",
     "sm": "y",
     "ym": "i",
-    "tone": 3
+    "tone": 1
   },
   {
     "word": "车",

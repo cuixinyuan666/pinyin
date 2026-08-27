@@ -22,10 +22,17 @@ fi
 echo "ROOT=${ROOT}"
 echo "SDK=${SDK}"
 
+echo "==> 0. generate pinyin data (UniPinyin)"
+if [ -f "$ROOT/lib/unipinyin.jar" ]; then
+  javac -encoding UTF-8 -cp "$ROOT/lib/unipinyin.jar" "$ROOT/tools/GeneratePinyinData.java" -d "$ROOT/tools"
+  java -cp "$ROOT/lib/unipinyin.jar:$ROOT/tools" GeneratePinyinData
+fi
+
 echo "==> 1. compile java"
 rm -rf "$OBJ"; mkdir -p "$OBJ"
 javac -encoding UTF-8 -source 17 -target 17 -cp "$AJ" -d "$OBJ" \
   "$ROOT/src/com/cuixinyuan/pinyin/MainActivity.java" \
+  "$ROOT/src/com/cuixinyuan/pinyin/PinyinBridge.java" \
   "$ROOT/src/com/cuixinyuan/pinyin/SnakeView.java" \
   "$ROOT/src/com/cuixinyuan/pinyin/TetrisView.java" \
   "$ROOT/src/com/cuixinyuan/pinyin/FruitNinjaView.java"

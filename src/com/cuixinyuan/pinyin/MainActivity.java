@@ -27,7 +27,6 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -70,129 +69,10 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
             "太棒啦！", "你真厉害！", "答对啦，真聪明！", "好样的！", "厉害厉害！", "你学会啦！"
     };
 
-    /** 声调按钮仅显示数字汉字（一/二/三/四），不显示调号字母与「x声」字样 */
-    private static final String[] TONE_NAME = {"一", "二", "三", "四"};
+    /** 声调按钮仅显示调号符号（ā á ǎ à），不使用中文数字或「x声」文字 */
+    private static final String[] TONE_MARK = {"ā", "á", "ǎ", "à"};
 
-    /** 整体认读音节（不拆声母+韵母拼读，直接读本字） */
-    private static final Set<String> WHOLE_SYLLABLE = new HashSet<>();
-    static {
-        WHOLE_SYLLABLE.add("zhi"); WHOLE_SYLLABLE.add("chi"); WHOLE_SYLLABLE.add("shi");
-        WHOLE_SYLLABLE.add("ri"); WHOLE_SYLLABLE.add("zi"); WHOLE_SYLLABLE.add("ci");
-        WHOLE_SYLLABLE.add("si"); WHOLE_SYLLABLE.add("yi"); WHOLE_SYLLABLE.add("wu");
-        WHOLE_SYLLABLE.add("yu"); WHOLE_SYLLABLE.add("ye"); WHOLE_SYLLABLE.add("yue");
-        WHOLE_SYLLABLE.add("yin"); WHOLE_SYLLABLE.add("yun"); WHOLE_SYLLABLE.add("ying");
-    }
-
-    /** 以 i 开头的复韵母/鼻韵母，不可拆成 i + 后半部分 */
-    private static final Set<String> I_COMPOUND_FINALS = new HashSet<>();
-    static {
-        I_COMPOUND_FINALS.add("ie"); I_COMPOUND_FINALS.add("in"); I_COMPOUND_FINALS.add("ing");
-        I_COMPOUND_FINALS.add("iu");
-    }
-
-    // ★ 发音核心修复 ★
-    // Android 中文 TTS 无法可靠地把「拉丁拼音字符串」当作汉语朗读——它会把 b、sh、ao
-    // 之类按【英文字母】读出，这正是「读成英文」的根因。可靠做法：一律给 TTS 传【汉字】。
-    //
-    // 声母 → 用该声母的「呼读音」对应汉字朗读（《汉语拼音方案》标准呼读音）。
-    // 例：b→玻 p→坡 m→摸 f→佛 d→得 t→特 j→鸡 q→七 x→西 sh→诗 …
-    // 挑选例字时刻意避开多音字，避免 TTS 读错：
-    //   b→波(bō，非「玻」)  d→德(dé，非「得」de/děi 多音)  l→了(le，非「勒」lēi≈累)
-    private static final Map<String, String> INITIAL_HANZI = new HashMap<>();
-    static {
-        INITIAL_HANZI.put("b", "波"); INITIAL_HANZI.put("p", "坡"); INITIAL_HANZI.put("m", "摸");
-        INITIAL_HANZI.put("f", "佛"); INITIAL_HANZI.put("d", "德"); INITIAL_HANZI.put("t", "特");
-        INITIAL_HANZI.put("n", "讷"); INITIAL_HANZI.put("l", "了"); INITIAL_HANZI.put("g", "哥");
-        INITIAL_HANZI.put("k", "科"); INITIAL_HANZI.put("h", "喝"); INITIAL_HANZI.put("j", "鸡");
-        INITIAL_HANZI.put("q", "七"); INITIAL_HANZI.put("x", "西"); INITIAL_HANZI.put("zh", "知");
-        INITIAL_HANZI.put("ch", "吃"); INITIAL_HANZI.put("sh", "诗"); INITIAL_HANZI.put("r", "日");
-        INITIAL_HANZI.put("z", "资"); INITIAL_HANZI.put("c", "疵"); INITIAL_HANZI.put("s", "思");
-        INITIAL_HANZI.put("y", "衣"); INITIAL_HANZI.put("w", "屋");
-    }
-
-    // 韵母 → 该韵母【四个声调】各自的例字（数组下标 0..3 对应 1..4 声）。
-    // 用整体认读音节（y/w 开头）的独体字，让 TTS 读出纯正的韵母 + 声调。
-    // 空串表示该「韵母+声调」无常用例字：此时回退朗读【本字汉字】，保证仍是正确中文发音。
-    private static final Map<String, String[]> FINAL_HANZI = new HashMap<>();
-    static {
-        FINAL_HANZI.put("a",    new String[]{"阿", "",   "",   "啊"});
-        FINAL_HANZI.put("o",    new String[]{"喔", "",   "",   "哦"});
-        FINAL_HANZI.put("e",    new String[]{"婀", "鹅", "恶", "饿"});
-        FINAL_HANZI.put("i",    new String[]{"衣", "移", "椅", "意"});
-        FINAL_HANZI.put("u",    new String[]{"乌", "无", "五", "物"});
-        FINAL_HANZI.put("ü",    new String[]{"迂", "鱼", "雨", "玉"});
-        FINAL_HANZI.put("er",   new String[]{"",   "而", "耳", "二"});
-        FINAL_HANZI.put("ai",   new String[]{"哀", "挨", "矮", "爱"});
-        FINAL_HANZI.put("ei",   new String[]{"",   "",   "",   ""});
-        FINAL_HANZI.put("ao",   new String[]{"凹", "熬", "袄", "奥"});
-        FINAL_HANZI.put("ou",   new String[]{"欧", "",   "偶", ""});
-        FINAL_HANZI.put("an",   new String[]{"安", "",   "俺", "按"});
-        FINAL_HANZI.put("en",   new String[]{"恩", "",   "",   ""});
-        FINAL_HANZI.put("ang",  new String[]{"",   "昂", "",   ""});
-        FINAL_HANZI.put("eng",  new String[]{"",   "",   "",   ""});
-        FINAL_HANZI.put("ong",  new String[]{"",   "",   "",   ""});
-        FINAL_HANZI.put("ia",   new String[]{"呀", "牙", "哑", "亚"});
-        FINAL_HANZI.put("ie",   new String[]{"耶", "爷", "也", "页"});
-        FINAL_HANZI.put("iao",  new String[]{"腰", "摇", "咬", "要"});
-        FINAL_HANZI.put("iu",   new String[]{"优", "油", "有", "右"});
-        FINAL_HANZI.put("ian",  new String[]{"烟", "严", "眼", "厌"});
-        FINAL_HANZI.put("in",   new String[]{"音", "银", "引", "印"});
-        FINAL_HANZI.put("ing",  new String[]{"英", "迎", "影", "硬"});
-        FINAL_HANZI.put("ua",   new String[]{"挖", "娃", "瓦", "袜"});
-        FINAL_HANZI.put("uo",   new String[]{"窝", "",   "我", "卧"});
-        FINAL_HANZI.put("uai",  new String[]{"歪", "",   "",   "外"});
-        FINAL_HANZI.put("ui",   new String[]{"威", "围", "伟", "位"});
-        FINAL_HANZI.put("uan",  new String[]{"弯", "完", "晚", "万"});
-        FINAL_HANZI.put("un",   new String[]{"温", "文", "稳", "问"});
-        FINAL_HANZI.put("ün",   new String[]{"晕", "云", "允", "运"});
-        FINAL_HANZI.put("uang", new String[]{"汪", "王", "往", "忘"});
-        FINAL_HANZI.put("ue",   new String[]{"约", "",   "",   "月"});
-        FINAL_HANZI.put("üe",   new String[]{"约", "",   "",   "月"});
-        FINAL_HANZI.put("iang", new String[]{"央", "羊", "仰", "样"});
-        FINAL_HANZI.put("iong", new String[]{"雍", "营", "涌", "用"});
-        FINAL_HANZI.put("ueng", new String[]{"",   "",   "",   ""});
-        FINAL_HANZI.put("uen",  new String[]{"温", "文", "稳", "问"});
-    }
-
-    // 数据里韵母 u / un 未区分 u 与 ü：拼音规则「j/q/x/y + u」实为 ü（如 去 qù、鱼 yú、雨 yǔ），
-    // 「j/q/x/y + un」实为 ün（如 云 yún）。据声母把韵母键纠正到 ü/ün，避免读成 u/un。
-    private static boolean isJqxyOrY(String sm) {
-        return "j".equals(sm) || "q".equals(sm) || "x".equals(sm) || "y".equals(sm);
-    }
-
-    private static String effectiveFinalKey(String sm, String ym) {
-        if ("u".equals(ym) && isJqxyOrY(sm)) return "ü";
-        if ("un".equals(ym) && isJqxyOrY(sm)) return "ün";
-        return ym;
-    }
-
-    /** 是否为整体认读音节（如 zhi、yi、wu） */
-    private static boolean isWholeSyllable(Word w) {
-        return w != null && WHOLE_SYLLABLE.contains(w.py);
-    }
-
-    /**
-     * 按《汉语拼音方案》三拼音节规则拆分韵母为可独立朗读的部分。
-     * 例：ua→[u,a]、uang→[u,ang]、iao→[i,ao]；复韵母 ui/iu/ie 等保持整体。
-     */
-    private static List<String> splitFinalParts(String ym) {
-        if (ym == null || ym.isEmpty()) return Collections.emptyList();
-        if (ym.length() > 1 && ym.charAt(0) == 'u') {
-            String rest = ym.substring(1);
-            if (rest.equals("a") || rest.equals("o") || rest.equals("ai") || rest.equals("ao")
-                    || rest.equals("an") || rest.equals("ang") || rest.equals("eng")) {
-                return Arrays.asList("u", rest);
-            }
-        }
-        if (ym.length() > 1 && ym.charAt(0) == 'i' && !I_COMPOUND_FINALS.contains(ym)) {
-            String rest = ym.substring(1);
-            if (rest.equals("a") || rest.equals("ao") || rest.equals("an") || rest.equals("ang")
-                    || rest.equals("ong")) {
-                return Arrays.asList("i", rest);
-            }
-        }
-        return Collections.singletonList(ym);
-    }
+    private PinyinBridge pinyinBridge;
 
     // ====== 数据 ======
     private static class Word {
@@ -263,6 +143,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        loadPinyinBridge();
         loadDictionary();
         loadLearned();
         tts = new TextToSpeech(this, this);
@@ -271,6 +152,28 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     }
 
     // ===================== 数据加载 =====================
+    private void loadPinyinBridge() {
+        try {
+            InputStream is = getAssets().open("pinyin_speak.json");
+            BufferedReader r = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder();
+            String line;
+            while ((line = r.readLine()) != null) sb.append(line);
+            r.close();
+            pinyinBridge = new PinyinBridge(new JSONObject(sb.toString()));
+        } catch (Exception e) {
+            try {
+                JSONObject empty = new JSONObject();
+                empty.put("initial", new JSONObject());
+                empty.put("final", new JSONObject());
+                empty.put("whole", new JSONArray());
+                pinyinBridge = new PinyinBridge(empty);
+            } catch (Exception ignored) {
+                pinyinBridge = null;
+            }
+        }
+    }
+
     private void loadDictionary() {
         try {
             InputStream is = getAssets().open(WORD_ASSET);
@@ -722,8 +625,8 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         toneRow.removeAllViews();
         for (int i = 0; i < 4; i++) {
             final int t = i + 1;
-            Button b = button(TONE_NAME[i], Color.WHITE, Color.parseColor("#37474F"));
-            b.setTextSize(TypedValue.COMPLEX_UNIT_SP, 22);
+            Button b = button(TONE_MARK[i], Color.WHITE, Color.parseColor("#37474F"));
+            b.setTextSize(TypedValue.COMPLEX_UNIT_SP, 28);
             b.setTag(t);
             b.setOnClickListener(v -> {
                 // 声调跟随对应汉字的韵母发声：用韵母例字朗读所选声调（无例字回退本字）
@@ -1078,32 +981,27 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         tts.speak(hanzi, queueMode, null, null);
     }
 
-    /** 取某韵母在指定声调（1..4）下的例字；结合声母纠正 u→ü / un→ün；无例字返回空串。 */
-    private String finalHanzi(String sm, String ym, int tone) {
-        if (ym == null || tone < 1 || tone > 4) return "";
-        String[] arr = FINAL_HANZI.get(effectiveFinalKey(sm, ym));
-        if (arr == null || arr.length < 4) return "";
-        String h = arr[tone - 1];
-        return h == null ? "" : h;
-    }
-
-    /** 朗读声母：用该声母的呼读音汉字（如 sh→诗、t→特），绝不读英文字母。 */
+    /** 朗读声母：UniPinyin 数据驱动的呼读音例字 */
     private void speakInitial(String s) {
-        String read = INITIAL_HANZI.get(s);
-        speakHanzi(read, TextToSpeech.QUEUE_FLUSH);
+        if (pinyinBridge == null) return;
+        String read = pinyinBridge.initialHanzi(s);
+        if (read != null && !read.isEmpty()) speakHanzi(read, TextToSpeech.QUEUE_FLUSH);
     }
 
-    /** 朗读韵母：三拼音节按介音+韵腹分开读（如 ua→乌+啊）；整体认读音节读本字；
-     *  其余按本字声调读韵母例字，无例字回退本字。 */
+    /** 朗读韵母：三拼音节分段读；例字来自 UniPinyin 生成的 pinyin_speak.json */
     private void speakFinal(String s) {
         Word w = currentWord();
-        if (isWholeSyllable(w)) {
+        if (pinyinBridge == null) {
             speakHanzi(w.hanzi, TextToSpeech.QUEUE_FLUSH);
             return;
         }
-        List<String> parts = splitFinalParts(s);
+        if (pinyinBridge.isWholeSyllable(w.py)) {
+            speakHanzi(w.hanzi, TextToSpeech.QUEUE_FLUSH);
+            return;
+        }
+        List<String> parts = pinyinBridge.finalParts(s);
         if (parts.size() <= 1) {
-            String h = finalHanzi(w.sm, s, w.tone);
+            String h = pinyinBridge.finalHanzi(w.sm, s, w.tone);
             if (h.isEmpty()) h = w.hanzi;
             speakHanzi(h, TextToSpeech.QUEUE_FLUSH);
             return;
@@ -1112,7 +1010,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         for (int i = 0; i < parts.size(); i++) {
             String part = parts.get(i);
             int tone = (i == parts.size() - 1) ? w.tone : 1;
-            String h = finalHanzi(w.sm, part, tone);
+            String h = pinyinBridge.finalHanzi(w.sm, part, tone);
             if (h.isEmpty() && i == parts.size() - 1) h = w.hanzi;
             if (h.isEmpty()) continue;
             speakHanzi(h, first ? TextToSpeech.QUEUE_FLUSH : TextToSpeech.QUEUE_ADD);
@@ -1120,30 +1018,31 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         }
     }
 
-    /** 声调按钮：直接朗读当前汉字本身（即本字的真实声调），不再统一用「a（啊）」示范。 */
+    /** 声调按钮：朗读本字（真实声调） */
     private void speakToneOfCurrent(int tone) {
         speakHanzi(currentWord().hanzi, TextToSpeech.QUEUE_FLUSH);
     }
 
-    /** 整段拼读：整体认读音节直接读本字；三拼音节韵母分段读（如 花→喝+乌+啊+花）；
-     *  其余为声母呼读音 + 韵母例字 + 本字；自动跳过重复片段。 */
+    /** 整段拼读：声母 + 韵母（可分段）+ 本字；整体认读音节直接读本字 */
     private void speakBlend(Word w) {
         if (!ttsReady || tts == null || w == null) return;
-        if (isWholeSyllable(w)) {
+        if (pinyinBridge != null && pinyinBridge.isWholeSyllable(w.py)) {
             speakHanzi(w.hanzi, TextToSpeech.QUEUE_FLUSH);
             return;
         }
         List<String> parts = new ArrayList<>();
-        if (!w.sm.isEmpty()) {
-            String sm = INITIAL_HANZI.get(w.sm);
+        if (pinyinBridge != null && !w.sm.isEmpty()) {
+            String sm = pinyinBridge.initialHanzi(w.sm);
             if (sm != null && !sm.isEmpty()) parts.add(sm);
         }
-        List<String> ymParts = splitFinalParts(w.ym);
-        for (int i = 0; i < ymParts.size(); i++) {
-            String part = ymParts.get(i);
-            int tone = (i == ymParts.size() - 1) ? w.tone : 1;
-            String h = finalHanzi(w.sm, part, tone);
-            if (!h.isEmpty()) parts.add(h);
+        if (pinyinBridge != null) {
+            List<String> ymParts = pinyinBridge.finalParts(w.ym);
+            for (int i = 0; i < ymParts.size(); i++) {
+                String part = ymParts.get(i);
+                int tone = (i == ymParts.size() - 1) ? w.tone : 1;
+                String h = pinyinBridge.finalHanzi(w.sm, part, tone);
+                if (!h.isEmpty()) parts.add(h);
+            }
         }
         parts.add(w.hanzi);
 
